@@ -62,3 +62,56 @@ void str_free(string_t *str) {
         free(str->ptr);
     }
 }
+
+// assigns base16 decoded src to dst
+int str_base16_decode(string_t *src, string_t *dst) {
+    if (str_create_empty(dst)) return E_INT;
+    char c;
+    for (unsigned long i = 0; i < src->length; i += 2) {
+        // concatenate two chars into one
+        c = (char) (((((int)src->ptr[i]) - 'a') * 16 ) + (int)src->ptr[i+1] - 'a');
+        if (str_append_char(dst, c)) return E_INT;
+    }
+    return EXIT_OK;
+}
+
+// assigns base16 encoded src to dst
+int str_base16_encode(string_t *src, string_t *dst) {
+    if (str_create_empty(dst)) return E_INT;
+
+    char *c;
+    for (unsigned long i = 0; i < src->length; i++) {
+        c = &src->ptr[i];
+        // split one char into two
+        if (str_append_char(dst, (char)(((unsigned char)(*c) >> 4) + 'a'))) return E_INT;
+        if (str_append_char(dst, (char)((unsigned char)(*c & 0x0f) + 'a'))) return E_INT;
+    }
+    return EXIT_OK;
+}
+
+// returns DNS formatted string in dst
+int str_label_format(string_t *src, string_t *dst) {
+    int p = 0, i;
+    // append a dot at the end
+    if (str_append_char(src, '.')) return E_INT;
+
+    for(i = 0; i < src->length; i++) {
+        if(src->ptr[i] == '.') {
+            // add label one octet number at the beginning
+            if (str_append_char(dst, (char)(i - p))) return E_INT;
+            // copy chars of that length
+            for(; p < i; p++) {
+                if (str_append_char(dst, src->ptr[p])) return E_INT;
+            }
+            p++;
+        }
+    }
+    return EXIT_OK;
+}
+
+// returns NULL terminated content in buffer
+int str_copy_to_buffer(string_t *src, unsigned char *buffer) {
+    memcpy(buffer, src->ptr, src->length);
+    buffer[src->length] = '\0';
+    return 0;
+}

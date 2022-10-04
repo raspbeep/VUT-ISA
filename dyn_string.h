@@ -24,9 +24,16 @@ typedef struct {
 
 int str_create_empty(string_t *str);
 
-
 int str_append_char(string_t *str, char ch);
 
 int str_append_string(string_t *str, char *s);
 
 void str_free(string_t *str);
+
+int str_base16_decode(string_t *src, string_t *dst);
+
+int str_base16_encode(string_t *src, string_t *dst);
+
+int str_label_format(string_t *src, string_t *dst);
+
+int str_copy_to_buffer(string_t *src, unsigned char *buffer);
