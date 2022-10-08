@@ -17,8 +17,8 @@
 
 typedef struct {
     char *ptr;
-    size_t alloc_length;
-    size_t length;
+    unsigned long alloc_length;
+    unsigned long length;
 } string_t;
 
 
@@ -30,10 +30,12 @@ int str_append_string(string_t *str, char *s);
 
 void str_free(string_t *str);
 
+int str_append_strings(string_t *dst, string_t *src);
+
 int str_base16_decode(string_t *src, string_t *dst);
 
 int str_base16_encode(string_t *src, string_t *dst);
 
-int str_label_format(string_t *src, string_t *dst);
+int str_base_host_label_format(string_t *src, string_t *dst);
 
 int str_copy_to_buffer(string_t *src, unsigned char *buffer);

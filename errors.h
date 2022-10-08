@@ -33,4 +33,6 @@
 #define E_OPEN_FILE 10
 // error occurred reading input file
 #define E_RD_FILE 11
-
+// base host does not meet length requirements(name is longer than 63 chars
+// or total length exceeds )
+#define E_HOST_LEN 12
