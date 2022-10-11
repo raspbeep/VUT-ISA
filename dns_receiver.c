@@ -142,6 +142,8 @@ int get_buffer_data(char *buffer, string_t *data, char *base_host) {
 int send_ack_response(const int *fd, char *buffer, unsigned int id, struct sockaddr_in *client, socklen_t length) {
     memset(buffer, 0, DNS_SIZE);
     construct_dns_header((unsigned char *)buffer, id, 0);
+//    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
+//    dns_header->ans_count = htons(1);
     unsigned long l = sizeof(struct DNSHeader);
 
     if ((sendto(*fd, buffer, l, 0, (struct sockaddr *)client, length)) != l) {

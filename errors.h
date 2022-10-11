@@ -52,3 +52,5 @@
 #define E_SND_TO 19
 
 #define E_REC_TO 20
+
+#define E_NM_SRV 21

@@ -82,7 +82,7 @@ int check_base_host(string_t *base_host) {
     if (str_base_host_label_format(base_host, &dns_formatted_host)) return E_INT;
 
     // +1 for zero length octet at the end
-    // +2 for at least on data byte(label length + one byt of data)
+    // +2 for at least on data byte(label length + one byte of data)
     // >=255 to leave at least one char for the actual data
     if (dns_formatted_host.length + 1 + 2 >= 255) {
         return E_HOST_LEN;
@@ -126,8 +126,52 @@ int format_base_host_string() {
     return EXIT_OK;
 }
 
+int find_ip_version(const char *src) {
+    char buf[64];
+    if (inet_pton(AF_INET, src, buf)) {
+        return 4;
+    } else if (inet_pton(AF_INET6, src, buf)) {
+        return 6;
+    }
+    return -1;
+}
+
+int scan_resolv_conf() {
+    int number_of_ips = 0;
+    FILE *fd;
+    open_file("/etc/resolv.conf", "r", &fd);
+    char line_buffer[512] = {0};
+    char ip_buffer[64] = {0};
+
+    while(fgets(line_buffer, 512, fd)) {
+        if (sscanf(line_buffer, "nameserver %s\n", ip_buffer)) {
+            if (find_ip_version(ip_buffer) == 4) {
+                number_of_ips += 1;
+                args.upstream_dns_ip = malloc(sizeof(char) * strlen(ip_buffer) + 1);
+                if (!args.upstream_dns_ip) {
+                    return E_INT;
+                }
+                memset(args.upstream_dns_ip, 0, strlen(ip_buffer) + 1);
+                strcpy(args.upstream_dns_ip, ip_buffer);
+                break;
+            }
+        }
+        for (int i = 0; i < 512; i++) {
+            if (i < 64) {
+                ip_buffer[i] = 0;
+            }
+            line_buffer[i] = 0;
+        }
+    }
+    if (!number_of_ips) {
+        return E_NM_SRV;
+    }
+    fclose(fd);
+    return 0;
+}
+
 int parse_args(int argc, char *argv[]) {
-    if (argc < 2 || argc > 7) {
+    if (argc < 2 || argc > 6) {
         handle_error(E_NUM_ARGS);
         print_help();
         return E_NUM_ARGS;
@@ -176,6 +220,10 @@ int parse_args(int argc, char *argv[]) {
     }
     // checks validity of provided base host and converts it into DNS format
     if (format_base_host_string()) return E_INT;
+    // upstream DNS server was not given, try to find one in /etc/resolv.conf
+    if (!u_flag) {
+        if (scan_resolv_conf()) return E_NM_SRV;
+    }
     return EXIT_OK;
 }
 
@@ -220,7 +268,12 @@ int read_src(string_t *buffer) {
 }
 
 /**
- *
+ * Splits encoded data into chunks and converts into DNS format(e.g. 3aaa2bb1c0)
+ * to use the maximum available space in queried name. The length inserted
+ * into each packet depends on the length of given base_host(the longer the base
+ * host name, the smaller the resulting capacity). Therefore, the maximum set
+ * length for base host name is 252B(maximum allowed is 255 - 1 zero length
+ * octet at the end - 1B data length octet and - 1B data).
  *
  *
  * @param base_host base host to appended in DNS format to each QNAME
@@ -300,7 +353,7 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
 
 int init_connection(int *sock, struct sockaddr_in *server) {
     server->sin_family = AF_INET;
-    server->sin_addr.s_addr = inet_addr(IP_ADDR);
+    server->sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
     server->sin_family = AF_INET;
     server->sin_port = htons(PORT);
 
