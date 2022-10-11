@@ -36,3 +36,19 @@
 // base host does not meet length requirements(name is longer than 63 chars
 // or total length exceeds )
 #define E_HOST_LEN 12
+
+#define E_PKT_SEND 13
+
+#define E_PKT_REC 14
+
+#define E_INIT_CONN 15
+// error creating a socket endpoint for communication
+#define E_SOCK_CRT 16
+// error initiating connection on a socket
+#define E_CONNECT 17
+
+#define E_TIMEOUT 18
+
+#define E_SND_TO 19
+
+#define E_REC_TO 20

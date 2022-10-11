@@ -9,7 +9,7 @@
  */
 
 #include "errors.h"
-#include "dns.h"
+#include "common.h"
 #include "dyn_string.h"
 #include <stdio.h>
 #include <string.h>
@@ -22,18 +22,21 @@
 
 #define IP_ADDR "0.0.0.0"
 #define PORT 53
-#define BUFFER 1024
 
 struct InputArgs {
-    // base domain for all communications
+    // base domain for all communication
     char *base_host;
+    // in a correct format e.g. `.example.com.`
+    string_t checked_base_host;
+    // in dns format, e.g. `.example.com.`
+    string_t formatted_base_host_string;
     // explicit remote DNS server
     char *upstream_dns_ip;
     // output file path on destination server
     char *dst_filepath;
     // if unspecified read from STDIN
     char *src_filepath;
-};
+} args;
 
 int handle_error(const int err_n) {
     switch (err_n) {
@@ -62,114 +65,6 @@ void print_help() {
     );
 }
 
-int parse_args(int argc, char *argv[], struct InputArgs* args) {
-    if (argc < 2 || argc > 7) {
-        handle_error(E_NUM_ARGS);
-        print_help();
-        return E_NUM_ARGS;
-    }
-
-    // clear the struct values
-    memset(args, 0, sizeof(struct InputArgs));
-
-    int positional_arg_counter = 0;
-    bool u_flag = false;
-
-    for (size_t i = 1; i < argc; ++i) {
-        if (!strcmp(argv[i], "--help")) {
-            if (argc != 2) return handle_error(E_INV_ARGS);
-            print_help();
-            return EXIT_H;
-        }
-
-        if (!strcmp(argv[i], "-u")) {
-            if(u_flag) return handle_error(E_RE_U_ARGS);
-            args->upstream_dns_ip = argv[++i];
-            u_flag = true;
-            continue;
-        }
-
-        if (!positional_arg_counter) {
-            args->base_host = argv[i];
-            positional_arg_counter++;
-            continue;
-        } else if (positional_arg_counter == 1) {
-            args->dst_filepath = argv[i];
-            positional_arg_counter++;
-            continue;
-        } else if (positional_arg_counter == 2){
-            args->src_filepath = argv[i];
-            continue;
-        } else {
-            return handle_error(E_POS_ARG);
-        }
-    }
-
-    // insufficient number of positional arguments were found
-    // at least too are required
-    if (positional_arg_counter <= 1) {
-        return handle_error(E_POS_ARG);
-    }
-    return EXIT_OK;
-}
-
-
-int open_file(const char *path, const char *read_mode, FILE **fptr) {
-    *fptr = fopen(path, read_mode);
-    if (*fptr == NULL) return E_OPEN_FILE;
-    return EXIT_OK;
-}
-
-/**
- * Reads input data from filepath(if was given) or reads from STDIN
- * until EOF is found. Checks permission for reading file on filepath.
- * returns E_RD_PERM if permissions are insufficient for reading.
- *
- *
- * @param src_filepath data is read from this path
- * @param buffer for saving data, must be allocated and empty
- *
- * @returns Returns E_RD_PERM or E_OPEN_FILE if permissions are
- * insufficient for reading. E_RD_FILE is return when an error reading
- * input file occurred. Otherwise returns EXIT_OK(0).
- */
-int read_src(char *src_filepath, string_t *buffer) {
-    FILE *fptr = 0;
-    int c;
-
-    if (src_filepath) {
-        // check reading permission
-        if (access(src_filepath, R_OK)) {
-            return E_RD_PERM;
-        }
-        // get file descriptor (only for binary reading)
-        if (open_file(src_filepath, "rb", &fptr)) {
-            return E_OPEN_FILE;
-        }
-
-        // read binary file
-        c = fgetc(fptr);
-        while (c != EOF) {
-            if (str_append_char(buffer, (char)c)) {
-                return E_INT;
-            }
-            c = fgetc(fptr);
-        }
-        // occurred an error reading character
-        if (!feof(fptr)) {
-            return E_RD_FILE;
-        }
-        return EXIT_OK;
-    }
-
-    ssize_t res;
-    while((res = read(0, &c, 1)) == 1) {
-        if (str_append_char(buffer, (char)c)) return E_INT;
-    }
-    if (res == 0) return EXIT_OK;
-    return E_RD_FILE;
-}
-
 /**
  * Checks the allowed length of base host. Name length must be shorter
  * than 63 bytes and the total length of DNS formatted base host must
@@ -181,7 +76,7 @@ int read_src(char *src_filepath, string_t *buffer) {
  *
  * @returns E_HOST_LEN for invalid length, return EXIT_OK(0) otherwise
  */
-int check_base_host_len(string_t *base_host) {
+int check_base_host(string_t *base_host) {
     string_t dns_formatted_host;
     if (str_create_empty(&dns_formatted_host)) return E_INT;
     if (str_base_host_label_format(base_host, &dns_formatted_host)) return E_INT;
@@ -206,10 +101,122 @@ int check_base_host_len(string_t *base_host) {
             }
             count = 0;
         } else {
+            // TODO: check if character is alphanumeric
             count++;
         }
     }
     return EXIT_OK;
+}
+
+int format_base_host_string() {
+    if (str_create_empty(&args.checked_base_host)) return E_INT;
+
+    // TODO: better error
+    if (!args.base_host) return E_INT;
+    // append dot at the beginning
+    if (*args.base_host != '.') {
+        if (str_append_char(&args.checked_base_host, '.')) return E_INT;
+    }
+    if (str_append_string(&args.checked_base_host, args.base_host)) return E_INT;
+    if (check_base_host(&args.checked_base_host)) return E_INT;
+    // save it into a global variable
+    if (str_create_empty(&args.formatted_base_host_string)) return E_INT;
+    // transform base host into DNS format
+    if (str_base_host_label_format(&args.checked_base_host, &args.formatted_base_host_string)) return E_INT;
+    return EXIT_OK;
+}
+
+int parse_args(int argc, char *argv[]) {
+    if (argc < 2 || argc > 7) {
+        handle_error(E_NUM_ARGS);
+        print_help();
+        return E_NUM_ARGS;
+    }
+
+    // clear the struct values
+    memset(&args, 0, sizeof(struct InputArgs));
+
+    int positional_arg_counter = 0;
+    bool u_flag = false;
+
+    for (size_t i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "--help")) {
+            if (argc != 2) return handle_error(E_INV_ARGS);
+            print_help();
+            return EXIT_H;
+        }
+
+        if (!strcmp(argv[i], "-u")) {
+            if(u_flag) return handle_error(E_RE_U_ARGS);
+            args.upstream_dns_ip = argv[++i];
+            u_flag = true;
+            continue;
+        }
+
+        if (!positional_arg_counter) {
+            args.base_host = argv[i];
+            positional_arg_counter++;
+            continue;
+        } else if (positional_arg_counter == 1) {
+            args.dst_filepath = argv[i];
+            positional_arg_counter++;
+            continue;
+        } else if (positional_arg_counter == 2){
+            args.src_filepath = argv[i];
+            continue;
+        } else {
+            return handle_error(E_POS_ARG);
+        }
+    }
+
+    // insufficient number of positional arguments were found
+    // at least too are required
+    if (positional_arg_counter <= 1) {
+        return handle_error(E_POS_ARG);
+    }
+    // checks validity of provided base host and converts it into DNS format
+    if (format_base_host_string()) return E_INT;
+    return EXIT_OK;
+}
+
+/**
+ * Reads input data from filepath(if was given) or reads from STDIN
+ * until EOF is found. Checks permission for reading file on filepath.
+ * returns E_RD_PERM if permissions are insufficient for reading.
+ *
+ *
+ * @param src_filepath data is read from this path
+ * @param buffer for saving data, must be allocated and empty
+ *
+ * @returns Returns E_RD_PERM or E_OPEN_FILE if permissions are
+ * insufficient for reading. E_RD_FILE is return when an error reading
+ * input file occurred. Otherwise returns EXIT_OK(0).
+ */
+int read_src(string_t *buffer) {
+    FILE *fptr = 0;
+    int c;
+
+    if (args.src_filepath) {
+        if (open_file(args.src_filepath, "rb", &fptr)) {
+            return E_OPEN_FILE;
+        }
+        // read binary file
+        c = fgetc(fptr);
+        while (c != EOF) {
+            if (str_append_char(buffer, (char)c)) return E_INT;
+            c = fgetc(fptr);
+        }
+        // occurred an error reading character
+        if (!feof(fptr)) return E_RD_FILE;
+        return EXIT_OK;
+    }
+
+    ssize_t res;
+    while((res = read(0, &c, 1)) == 1) {
+        if (str_append_char(buffer, (char)c)) return E_INT;
+    }
+    if (res == 0) return EXIT_OK;
+    return E_RD_FILE;
 }
 
 /**
@@ -223,27 +230,9 @@ int check_base_host_len(string_t *base_host) {
  *
  * @returns
  */
-int split_into_chunks(char *base_host, string_t *data, string_t **chunks, unsigned long *n_chunks) {
-    string_t base_host_string;
-    if (str_create_empty(&base_host_string)) return E_INT;
-    if (!base_host) return E_INT;
-
-    // append dot at the beginning
-    if (*base_host != '.') {
-        if (str_append_char(&base_host_string, '.')) return E_INT;
-    }
-    if (str_append_string(&base_host_string, base_host)) return E_INT;
-    if (check_base_host_len(&base_host_string)) return E_INT;
-
-    string_t formatted_base_host_string;
-    if (str_create_empty(&formatted_base_host_string)) return E_INT;
-    // transform base host into DNS format
-    if (str_base_host_label_format(&base_host_string, &formatted_base_host_string)) return E_INT;
-
-    // available length of data in one QNAME = DATA+BASE_HOST+1
-    // -1 for zero length octet
-    int available_data_length = QNAME_SIZE - formatted_base_host_string.length;
-
+int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks) {
+    // available length of data in one QNAME = DATA+BASE_HOST
+    int available_data_length = QNAME_SIZE - args.formatted_base_host_string.length;
     *chunks = malloc(sizeof(string_t));
     if (str_create_empty(*chunks)) return E_INT;
     if (!*chunks) return E_INT;
@@ -263,8 +252,8 @@ int split_into_chunks(char *base_host, string_t *data, string_t **chunks, unsign
         string_t *current = (string_t *)(*chunks + chunk_count);
         // until chunk is full or any data is left
         while(capacity_left && count != data->length) {
+            // insert length octet at the beginning or after 63 chars of data
             if (first || current_count == 64) {
-                printf("left: %lu\n", data->length - count);
                 current_count = 0;
                 // if total data left to copy is larger than current label size
                 if (data->length - count >= LABEL_SIZE) {
@@ -284,6 +273,7 @@ int split_into_chunks(char *base_host, string_t *data, string_t **chunks, unsign
 
                 first = false;
             } else {
+
                 if (str_append_char(current, data->ptr[count])) return E_INT;
                 current_count++;
                 capacity_left--;
@@ -291,7 +281,7 @@ int split_into_chunks(char *base_host, string_t *data, string_t **chunks, unsign
             }
         }
         // concatenate with base host
-        if (str_append_strings(current, &formatted_base_host_string)) return E_INT;
+        if (str_append_strings(current, &args.formatted_base_host_string)) return E_INT;
 
         // a new chunk will be needed
         if (count != data->length) {
@@ -305,131 +295,130 @@ int split_into_chunks(char *base_host, string_t *data, string_t **chunks, unsign
         }
     }
     *n_chunks = chunk_count + 1;
-    str_free(&formatted_base_host_string);
     return EXIT_OK;
 }
 
-//int create_first_info_packet(char *buffer, unsigned long n_chunks) {
-//
-//
-//
-//}
+int init_connection(int *sock, struct sockaddr_in *server) {
+    server->sin_family = AF_INET;
+    server->sin_addr.s_addr = inet_addr(IP_ADDR);
+    server->sin_family = AF_INET;
+    server->sin_port = htons(PORT);
+
+    // create datagram socket
+    if ((*sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        return E_SOCK_CRT;
+    }
+
+//    struct timeval timeout;
+//    timeout.tv_sec = 1;
+//    timeout.tv_usec = 1;
+//    if(setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+//        return E_TIMEOUT;
+//    }
+
+    // connect to server
+    if(connect(*sock, (struct sockaddr *)server, sizeof(struct sockaddr_in)) < 0) {
+        return E_CONNECT;
+    }
+    return EXIT_OK;
+}
+
+int send_first_info_packet(unsigned long n_chunks, int sock, unsigned char *buffer, int *pos, ssize_t *rec_len) {
+    // format of first packet
+    // ||HEADER(id=0, n_question=1) || QUESTION n_chunks.dst_filepath.base-host-domain.tld || question info ||
+    memset(buffer, 0, DNS_SIZE);
+    construct_dns_header((buffer), 0, 1);
+    *pos += sizeof(struct DNSHeader);
+
+    // create content of first packet in the form of a domain name
+    // insert number of chunks
+    string_t data;
+    if (str_create_empty(&data)) return E_INT;
+
+    char b[LABEL_SIZE + 1] = {0};
+    sprintf(b, "%lu", n_chunks);
+    if (strlen(b) > 63) {
+        return E_INT;
+    }
+    *(buffer + *pos) = (char)strlen(b);
+    *pos += 1;
+    sprintf((char *)(buffer + *pos), "%lu", n_chunks);
+    *pos += (int)strlen(b);
+
+    // append dst_filepath in the form of `/name[.file_extension]`
+    // TODO: convert to dns format
+    int count = 0;
+    char *c = &args.dst_filepath[0];
+    while (*c != '.' && *c != '\0') {
+        c++;
+        count ++;
+    }
+    *(buffer + *pos) = count;
+    *pos += 1;
+    for (int i = 0; i < strlen(args.dst_filepath); i++) {
+        if (args.dst_filepath[i] == '.') {
+            c = &args.dst_filepath[i+1];
+            count = 0;
+            while (*c != '.' && *c != '\0') {
+                c++;
+                count ++;
+            }
+            *(buffer + *pos) = count;
+        } else {
+            *(buffer + *pos) = args.dst_filepath[i];
+        }
+        *pos += 1;
+    }
+
+    // append base host domain from argument
+    for (int i = 0; i < args.formatted_base_host_string.length; i++) {
+        *(buffer + *pos + i) = *(args.formatted_base_host_string.ptr + i);
+    }
+    *pos += (int)args.checked_base_host.length;
+
+    construct_dns_question(buffer + *pos);
+    *pos += sizeof(struct Question);
+
+    if (send_packet(sock, buffer, *pos)) return E_PKT_SEND;
+    if (get_packet(sock, buffer, rec_len)) return E_PKT_REC;
+    return EXIT_OK;
+}
 
 int dns_packet(string_t **chunks, unsigned long n_chunks) {
     int sock;
-    struct sockaddr_in server, from;
-    socklen_t len, from_len;
-    unsigned int pos = 0;
+    struct sockaddr_in server;
+    int pos = 0;
     unsigned char buffer[DNS_SIZE];
-    // initialize pointer to dns header
-    struct DNSHeader *dns_header = NULL;
-    struct Question *q_info = NULL;
+    ssize_t rec_len;
 
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = inet_addr(IP_ADDR);
-    server.sin_family = AF_INET;
-    server.sin_port = htons(PORT);
+    if (init_connection(&sock, &server)) return E_INIT_CONN;
 
-    // create datagram socket
-    if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-        // TODO: handle this one
-        return -1;
-    }
+    if (send_first_info_packet(n_chunks, sock, buffer, &pos, &rec_len)) return E_PKT_SEND;
 
-    // connect to server
-    if(connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
-        // TODO: handle this one
-        return -1;
-    }
-
-    // clear buffer
-    memset(buffer, 0, DNS_SIZE);
-    dns_header = (struct DNSHeader *)&buffer;
-    construct_dns_header(dns_header, 0);
-    pos += sizeof(struct DNSHeader);
-
-    sprintf((char *)(buffer+pos), "%lu\n", n_chunks);
-
-    pos += strlen((char *)buffer+pos);
-    q_info = (struct Question*)&buffer[pos];
-    q_info->q_type = htons(1);  // a record
-    q_info->q_class = htons(1); // internet
-
-    pos += sizeof(struct Question);
-
-    // printf("%s", (*chunks + chunk_n)->ptr);
-    if (send(sock, buffer, pos, 0) != pos) {
-        // TODO: handle this one
-        return -1;
-    }
-
-//    if (getsockname(sock, (struct sockaddr *) &from, &len)) {
-//        // TODO: handle this one
-//        return -1;
-//    }
-
-    if ((recv(sock, buffer, DNS_SIZE, 0)) == -1) {
-        // TODO: handle this one
-        return -1;
-    }
-
-//    if (getpeername(sock, (struct sockaddr *)&from, &from_len) != 0) {
-//        // TODO: handle this one
-//        return -1;
-//    }
-
-    printf("n_chunks: %lu\n", n_chunks);
     for (unsigned int chunk_n = 0; chunk_n < n_chunks; chunk_n++) {
         //  || DNS header || QNAME | QTYPE | QCLASS ||
-        // position in buffer
         pos = 0;
-        // memset(&server, 0, sizeof(server));
         memset(buffer, 0, sizeof(buffer));
-
-        // initialize pointer to dns header
-        dns_header = NULL;
-        // set pointer of dns header to the beginning of buffer
-        dns_header = (struct DNSHeader *)&buffer;
-        construct_dns_header(dns_header, chunk_n);
+        // create header and shift `pos`
+        construct_dns_header(buffer, chunk_n, 1);
         pos += sizeof(struct DNSHeader);
 
-
-        string_t *current_chunk =(string_t *)(*chunks + chunk_n);
+        // copy data into buffer and shift `pos`
+        string_t *current_chunk = (string_t *)(*chunks + chunk_n);
         // copy chunk data to buffer
         str_copy_to_buffer(current_chunk, buffer + pos);
-
         // +1 for null byte at the end of QNAME
-        pos += (*chunks + chunk_n)->length + 1;
+        pos += (int)(*chunks + chunk_n)->length;
 
-        q_info = NULL;
-        q_info = (struct Question*)&buffer[pos];
-        q_info->q_type = htons(1);  // a record
-        q_info->q_class = htons(1); // internet
-
+        // create question info and shift `pos`
+        construct_dns_question(buffer + pos);
         pos += sizeof(struct Question);
-
-        if (send(sock, buffer, pos, 0) != pos) {
-            // TODO: handle this one
-            return -1;
-        }
-
-//        if (getsockname(sock, (struct sockaddr *) &from, &len)) {
-//            // TODO: handle this one
-//            return -1;
-//        }
-
-        if ((recv(sock, buffer, DNS_SIZE, 0)) == -1) {
-            // TODO: handle this one
-            return -1;
-        }
-
-//        if (getpeername(sock, (struct sockaddr *)&from, &from_len) != 0) {
-//            // TODO: handle this one
-//            return -1;
-//        }
+        // send query
+        if (send_packet(sock, buffer, pos)) return E_SND_TO;
+        // receive answer
+        if (get_packet(sock, buffer, &rec_len)) return E_REC_TO;
     }
     free(*chunks);
-
     return 0;
 }
 
@@ -438,8 +427,8 @@ int main(int argc, char *argv[]) {
     int result;
 
     // parse and store input arguments
-    struct InputArgs args;
-    result = parse_args(argc, argv, &args);
+
+    result = parse_args(argc, argv);
     // return 0 if `--help`
     if (result == EXIT_H) return EXIT_OK;
     if (result) return result;
@@ -447,7 +436,7 @@ int main(int argc, char *argv[]) {
     // read input and load into buffer
     string_t buffer;
     if (str_create_empty(&buffer)) return E_INT;
-    result = read_src(args.src_filepath, &buffer);
+    result = read_src(&buffer);
     if (result) return result;
 
     string_t encoded_string;
@@ -457,14 +446,7 @@ int main(int argc, char *argv[]) {
     printf("Length base16: %lu\n", encoded_string.length);
     string_t *chunks = NULL;
     unsigned long n_chunks;
-    split_into_chunks(args.base_host, &encoded_string, &chunks, &n_chunks);
+    split_into_chunks(&encoded_string, &chunks, &n_chunks);
 
-    dns_packet(&chunks, n_chunks);
-
-    printf("base host: %s\n", args.base_host);
-    printf("upstream dns ip: %s\n", args.upstream_dns_ip);
-    printf("dst filepath: %s\n", args.dst_filepath);
-    printf("src filepath: %s\n", args.src_filepath);
-
-    return 0;
+    return dns_packet(&chunks, n_chunks);
 }
