@@ -22,8 +22,6 @@
 #include "common.h"
 #include "dyn_string.h"
 
-#define PORT 53
-
 struct InputArgs {
     // base domain for all communication
     char *base_host;
@@ -228,6 +226,7 @@ int read_src(string_t *buffer) {
     while((res = read(0, &c, 1)) == 1) {
         if (str_append_char(buffer, (char)c)) return E_INT;
     }
+    fclose(fptr);
     if (res == 0) return EXIT_OK;
     return E_RD_FILE;
 }
@@ -312,7 +311,7 @@ int init_connection() {
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
-    serv_addr.sin_port = htons(PORT);
+    serv_addr.sin_port = htons(DNS_PORT);
 
     // create datagram socket
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -436,7 +435,6 @@ int main(int argc, char *argv[]) {
     if (result) return result;
 
     string_t encoded_string;
-    str_create_empty(&encoded_string);
     printf("Length binary: %lu\n", buffer.length);
     str_base16_encode(&buffer, &encoded_string);
     printf("Length base16: %lu\n", encoded_string.length);
