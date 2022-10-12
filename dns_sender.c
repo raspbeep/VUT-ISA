@@ -8,19 +8,20 @@
  * @brief
  */
 
-#include "errors.h"
-#include "common.h"
-#include "dyn_string.h"
 #include <stdio.h>
 #include <string.h>
 #include "stdbool.h"
 #include <unistd.h>
 #include <stdlib.h>
+
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define IP_ADDR "0.0.0.0"
+#include "errors.h"
+#include "common.h"
+#include "dyn_string.h"
+
 #define PORT 53
 
 struct InputArgs {
@@ -37,24 +38,9 @@ struct InputArgs {
     // if unspecified read from STDIN
     char *src_filepath;
 } args;
-
-int handle_error(const int err_n) {
-    switch (err_n) {
-        case E_INT:
-            // print message
-            return -2;
-        case E_NUM_ARGS:
-            fprintf(stderr, "Insufficient number of arguments\n");
-            // invalid number of parameters
-            return E_NUM_ARGS;
-        case E_INV_ARGS:
-            // invalid arguments
-            return E_INV_ARGS;
-        default:
-            // print message
-            return -3;
-    }
-}
+struct sockaddr_in serv_addr;
+socklen_t addr_len;
+int sock_fd;
 
 void print_help() {
     printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
@@ -187,7 +173,7 @@ int parse_args(int argc, char *argv[]) {
         if (!strcmp(argv[i], "--help")) {
             if (argc != 2) return handle_error(E_INV_ARGS);
             print_help();
-            return EXIT_H;
+            return EXIT_HELP;
         }
 
         if (!strcmp(argv[i], "-u")) {
@@ -227,19 +213,6 @@ int parse_args(int argc, char *argv[]) {
     return EXIT_OK;
 }
 
-/**
- * Reads input data from filepath(if was given) or reads from STDIN
- * until EOF is found. Checks permission for reading file on filepath.
- * returns E_RD_PERM if permissions are insufficient for reading.
- *
- *
- * @param src_filepath data is read from this path
- * @param buffer for saving data, must be allocated and empty
- *
- * @returns Returns E_RD_PERM or E_OPEN_FILE if permissions are
- * insufficient for reading. E_RD_FILE is return when an error reading
- * input file occurred. Otherwise returns EXIT_OK(0).
- */
 int read_src(string_t *buffer) {
     FILE *fptr = 0;
     int c;
@@ -265,6 +238,12 @@ int read_src(string_t *buffer) {
     }
     if (res == 0) return EXIT_OK;
     return E_RD_FILE;
+}
+
+void free_chunks(string_t **chunks, unsigned long n_chunks) {
+    for (unsigned long i = 0; i < n_chunks; i++) {
+        str_free((string_t *)(*chunks + (i)));
+    }
 }
 
 /**
@@ -351,14 +330,14 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
     return EXIT_OK;
 }
 
-int init_connection(int *sock, struct sockaddr_in *server) {
-    server->sin_family = AF_INET;
-    server->sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
-    server->sin_family = AF_INET;
-    server->sin_port = htons(PORT);
+int init_connection() {
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
+    serv_addr.sin_port = htons(PORT);
 
     // create datagram socket
-    if ((*sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+    if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         return E_SOCK_CRT;
     }
 
@@ -368,15 +347,10 @@ int init_connection(int *sock, struct sockaddr_in *server) {
 //    if(setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
 //        return E_TIMEOUT;
 //    }
-
-    // connect to server
-    if(connect(*sock, (struct sockaddr *)server, sizeof(struct sockaddr_in)) < 0) {
-        return E_CONNECT;
-    }
     return EXIT_OK;
 }
 
-int send_first_info_packet(unsigned long n_chunks, int sock, unsigned char *buffer, int *pos, ssize_t *rec_len) {
+int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos, ssize_t *rec_len) {
     // format of first packet
     // ||HEADER(id=0, n_question=1) || QUESTION n_chunks.dst_filepath.base-host-domain.tld || question info ||
     memset(buffer, 0, DNS_SIZE);
@@ -399,7 +373,6 @@ int send_first_info_packet(unsigned long n_chunks, int sock, unsigned char *buff
     *pos += (int)strlen(b);
 
     // append dst_filepath in the form of `/name[.file_extension]`
-    // TODO: convert to dns format
     int count = 0;
     char *c = &args.dst_filepath[0];
     while (*c != '.' && *c != '\0') {
@@ -432,21 +405,19 @@ int send_first_info_packet(unsigned long n_chunks, int sock, unsigned char *buff
     construct_dns_question(buffer + *pos);
     *pos += sizeof(struct Question);
 
-    if (send_packet(sock, buffer, *pos)) return E_PKT_SEND;
-    if (get_packet(sock, buffer, rec_len)) return E_PKT_REC;
+    if (send_packet(sock_fd, &serv_addr, buffer, *pos)) return E_PKT_SEND;
+    if (get_packet(sock_fd, &serv_addr, buffer, rec_len, &addr_len)) return E_PKT_REC;
     return EXIT_OK;
 }
 
 int dns_packet(string_t **chunks, unsigned long n_chunks) {
-    int sock;
-    struct sockaddr_in server;
     int pos = 0;
     unsigned char buffer[DNS_SIZE];
     ssize_t rec_len;
 
-    if (init_connection(&sock, &server)) return E_INIT_CONN;
+    if (init_connection()) return E_INIT_CONN;
 
-    if (send_first_info_packet(n_chunks, sock, buffer, &pos, &rec_len)) return E_PKT_SEND;
+    if (send_first_info_packet(n_chunks, buffer, &pos, &rec_len)) return E_PKT_SEND;
 
     for (unsigned int chunk_n = 0; chunk_n < n_chunks; chunk_n++) {
         //  || DNS header || QNAME | QTYPE | QCLASS ||
@@ -467,14 +438,13 @@ int dns_packet(string_t **chunks, unsigned long n_chunks) {
         construct_dns_question(buffer + pos);
         pos += sizeof(struct Question);
         // send query
-        if (send_packet(sock, buffer, pos)) return E_SND_TO;
+        if (send_packet(sock_fd, &serv_addr, buffer, pos)) return E_PKT_SEND;
         // receive answer
-        if (get_packet(sock, buffer, &rec_len)) return E_REC_TO;
+        if (get_packet(sock_fd, &serv_addr, buffer, &rec_len, &addr_len)) return E_PKT_REC;
     }
-    free(*chunks);
+    free_chunks(chunks, n_chunks);
     return 0;
 }
-
 
 int main(int argc, char *argv[]) {
     int result;
@@ -483,7 +453,7 @@ int main(int argc, char *argv[]) {
 
     result = parse_args(argc, argv);
     // return 0 if `--help`
-    if (result == EXIT_H) return EXIT_OK;
+    if (result == EXIT_HELP) return EXIT_OK;
     if (result) return result;
 
     // read input and load into buffer
@@ -502,4 +472,6 @@ int main(int argc, char *argv[]) {
     split_into_chunks(&encoded_string, &chunks, &n_chunks);
 
     return dns_packet(&chunks, n_chunks);
+
+    close(sock_fd);
 }

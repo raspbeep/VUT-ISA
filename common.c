@@ -54,16 +54,76 @@ int open_file(const char *path, const char *read_mode, FILE **fptr) {
     return EXIT_OK;
 }
 
-int send_packet(int sock, unsigned char *buffer, int pos) {
-    if (send(sock, buffer, pos, 0) != pos) {
+int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int pos) {
+    if (sendto(sock, buffer, pos, 0, (const struct sockaddr *)addr, sizeof(*addr)) != pos) {
         return E_PKT_SEND;
     }
     return EXIT_OK;
 }
 
-int get_packet(int sock, unsigned char *buffer, ssize_t *len) {
-    if ((*len = recv(sock, buffer, DNS_SIZE, 0)) <= 0) {
+int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len) {
+    if ((*rec_len = recvfrom(sock, buffer, DNS_SIZE, 0, (struct sockaddr *)addr, addr_len) <= 0)) {
         return E_PKT_REC;
     }
     return EXIT_OK;
+}
+
+int handle_error(const int err_n) {
+    switch (err_n) {
+        case E_INT:
+            fprintf(stderr, "Err: \n");
+            // invalid number of parameters
+            return E_INT;
+        case EXIT_HELP:
+            return EXIT_OK;
+        case E_NUM_ARGS:
+            fprintf(stderr, "Err: \n");
+            return E_NUM_ARGS;
+        case E_INV_ARGS:
+            fprintf(stderr, "Err: \n");
+            return E_INV_ARGS;
+        case E_RE_U_ARGS:
+            fprintf(stderr, "Err: \n");
+            return E_RE_U_ARGS;
+        case E_POS_ARG:
+            fprintf(stderr, "Err: \n");
+            return E_POS_ARG;
+//        case E_WR_PERM:
+//            fprintf(stderr, "Err: \n");
+//            return E_WR_PERM;
+        case E_OPEN_FILE:
+            fprintf(stderr, "Err: \n");
+            return E_OPEN_FILE;
+        case E_RD_FILE:
+            fprintf(stderr, "Err: \n");
+            return E_RD_FILE;
+        case E_HOST_LEN:
+            fprintf(stderr, "Err: \n");
+            return E_HOST_LEN;
+        case E_PKT_SEND:
+            fprintf(stderr, "Err: \n");
+            return E_PKT_SEND;
+        case E_PKT_REC:
+            fprintf(stderr, "Err: \n");
+            return E_PKT_REC;
+        case E_INIT_CONN:
+            fprintf(stderr, "Err: \n");
+            return E_INIT_CONN;
+        case E_SOCK_CRT:
+            fprintf(stderr, "Err: \n");
+            return E_SOCK_CRT;
+        case E_BIND:
+            fprintf(stderr, "Err: \n");
+            return E_BIND;
+//        case E_TIMEOUT:
+//            fprintf(stderr, "Err: \n");
+//            // invalid number of parameters
+//            return E_TIMEOUT;
+        case E_NM_SRV:
+            fprintf(stderr, "Err: \n");
+            return E_NM_SRV;
+        default:
+            fprintf(stderr, "Err: Unknown error occurred\n");
+            return 69;
+    }
 }

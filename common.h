@@ -44,8 +44,10 @@ void construct_dns_question(unsigned char *buffer);
 
 void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_questions);
 
-int get_packet(int sock, unsigned char *buffer, ssize_t *len);
+int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len);
 
-int send_packet(int sock, unsigned char *buffer, int pos);
+int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int pos);
 
 int open_file(const char *path, const char *read_mode, FILE **fptr);
+
+int handle_error(int err_n);
