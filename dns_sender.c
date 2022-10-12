@@ -51,17 +51,6 @@ void print_help() {
     );
 }
 
-/**
- * Checks the allowed length of base host. Name length must be shorter
- * than 63 bytes and the total length of DNS formatted base host must
- * be shorter than 252 (1 null byte and 2 bytes for data - length + char)
- * to leave space for the encoded data
- *
- *
- * @param base_host data is read from this path
- *
- * @returns E_HOST_LEN for invalid length, return EXIT_OK(0) otherwise
- */
 int check_base_host(string_t *base_host) {
     string_t dns_formatted_host;
     if (str_create_empty(&dns_formatted_host)) return E_INT;
@@ -78,8 +67,10 @@ int check_base_host(string_t *base_host) {
     unsigned long count = 0;
     // check label length
     // +1 to check until the `\0` at the end
+    unsigned char c;
     for (int i = 0; i < base_host->length + 1; i++) {
-        if (*(base_host->ptr + i) == '.' || *(base_host->ptr + i) == '\0') {
+        c = *(base_host->ptr + i);
+        if (c == '.' || c == '\0') {
             if (!count) continue;
             // rfc1035 2.3.4
             if (count > 63) {
@@ -87,7 +78,9 @@ int check_base_host(string_t *base_host) {
             }
             count = 0;
         } else {
-            // TODO: check if character is alphanumeric
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == '.')) {
+                return E_HOST_INV_CHAR;
+            }
             count++;
         }
     }
@@ -97,7 +90,6 @@ int check_base_host(string_t *base_host) {
 int format_base_host_string() {
     if (str_create_empty(&args.checked_base_host)) return E_INT;
 
-    // TODO: better error
     if (!args.base_host) return E_INT;
     // append dot at the beginning
     if (*args.base_host != '.') {
@@ -242,26 +234,12 @@ int read_src(string_t *buffer) {
 
 void free_chunks(string_t **chunks, unsigned long n_chunks) {
     for (unsigned long i = 0; i < n_chunks; i++) {
-        str_free((string_t *)(*chunks + (i)));
+        string_t *current = (string_t *)(*chunks + (i));
+        str_free(current);
     }
+    free(*chunks);
 }
 
-/**
- * Splits encoded data into chunks and converts into DNS format(e.g. 3aaa2bb1c0)
- * to use the maximum available space in queried name. The length inserted
- * into each packet depends on the length of given base_host(the longer the base
- * host name, the smaller the resulting capacity). Therefore, the maximum set
- * length for base host name is 252B(maximum allowed is 255 - 1 zero length
- * octet at the end - 1B data length octet and - 1B data).
- *
- *
- * @param base_host base host to appended in DNS format to each QNAME
- * @param data all data to send
- * @param chunks pointer to array of data chunks to send
- * @param n_chunks number of chunks(packets) to send
- *
- * @returns
- */
 int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks) {
     // available length of data in one QNAME = DATA+BASE_HOST
     int available_data_length = QNAME_SIZE - args.formatted_base_host_string.length;
@@ -357,11 +335,6 @@ int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *p
     construct_dns_header((buffer), 0, 1);
     *pos += sizeof(struct DNSHeader);
 
-    // create content of first packet in the form of a domain name
-    // insert number of chunks
-    string_t data;
-    if (str_create_empty(&data)) return E_INT;
-
     char b[LABEL_SIZE + 1] = {0};
     sprintf(b, "%lu", n_chunks);
     if (strlen(b) > 63) {
@@ -410,7 +383,7 @@ int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *p
     return EXIT_OK;
 }
 
-int dns_packet(string_t **chunks, unsigned long n_chunks) {
+int send_packets(string_t **chunks, unsigned long n_chunks) {
     int pos = 0;
     unsigned char buffer[DNS_SIZE];
     ssize_t rec_len;
@@ -442,6 +415,7 @@ int dns_packet(string_t **chunks, unsigned long n_chunks) {
         // receive answer
         if (get_packet(sock_fd, &serv_addr, buffer, &rec_len, &addr_len)) return E_PKT_REC;
     }
+    printf("cleaning chunks");
     free_chunks(chunks, n_chunks);
     return 0;
 }
@@ -450,7 +424,6 @@ int main(int argc, char *argv[]) {
     int result;
 
     // parse and store input arguments
-
     result = parse_args(argc, argv);
     // return 0 if `--help`
     if (result == EXIT_HELP) return EXIT_OK;
@@ -471,7 +444,11 @@ int main(int argc, char *argv[]) {
     unsigned long n_chunks;
     split_into_chunks(&encoded_string, &chunks, &n_chunks);
 
-    return dns_packet(&chunks, n_chunks);
-
+    str_free(&encoded_string);
+    str_free(&buffer);
+    str_free(&args.checked_base_host);
+    str_free(&args.formatted_base_host_string);
     close(sock_fd);
+
+    return send_packets(&chunks, n_chunks);
 }

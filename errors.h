@@ -34,17 +34,19 @@
 // base host does not meet length requirements(name is longer than 63 chars
 // or total length exceeds )
 #define E_HOST_LEN 11
+// invalid char in base host, only alphanumeric are allowed
+#define E_HOST_INV_CHAR 12
 // error during sending packet
-#define E_PKT_SEND 12
+#define E_PKT_SEND 13
 // error during receiving packet
-#define E_PKT_REC 13
+#define E_PKT_REC 14
 // error initializing connection
-#define E_INIT_CONN 14
+#define E_INIT_CONN 15
 // error creating a socket endpoint for communication
-#define E_SOCK_CRT 15
+#define E_SOCK_CRT 16
 // error binding to socket
-#define E_BIND 16
+#define E_BIND 17
 // error timeout reached
-#define E_TIMEOUT 17
+#define E_TIMEOUT 18
 // error scanning /etc/resolv.conf
-#define E_NM_SRV 18
+#define E_NM_SRV 19

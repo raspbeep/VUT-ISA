@@ -71,34 +71,33 @@ int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_
 int handle_error(const int err_n) {
     switch (err_n) {
         case E_INT:
-            fprintf(stderr, "Err: \n");
-            // invalid number of parameters
+            fprintf(stderr, "Err: Internal error\n");
             return E_INT;
         case EXIT_HELP:
             return EXIT_OK;
         case E_NUM_ARGS:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Invalid number of arguments\n");
             return E_NUM_ARGS;
         case E_INV_ARGS:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Invalid arguments\n");
             return E_INV_ARGS;
         case E_RE_U_ARGS:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Redefinition of -u flag\n");
             return E_RE_U_ARGS;
         case E_POS_ARG:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Invalid number of positional arguments\n");
             return E_POS_ARG;
 //        case E_WR_PERM:
 //            fprintf(stderr, "Err: \n");
 //            return E_WR_PERM;
         case E_OPEN_FILE:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Unable to open file\n");
             return E_OPEN_FILE;
         case E_RD_FILE:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Unable to read file\n");
             return E_RD_FILE;
         case E_HOST_LEN:
-            fprintf(stderr, "Err: \n");
+            fprintf(stderr, "Err: Invalid base host length(must bet <=63)\n");
             return E_HOST_LEN;
         case E_PKT_SEND:
             fprintf(stderr, "Err: \n");

@@ -74,6 +74,6 @@ int init_connection();
 
 int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos, ssize_t *rec_len);
 
-int dns_packet(string_t **chunks, unsigned long n_chunks);
+int send_packets(string_t **chunks, unsigned long n_chunks);
 
 void free_chunks(string_t **chunks, unsigned long n_chunks);
