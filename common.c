@@ -62,7 +62,8 @@ int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int p
 }
 
 int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len) {
-    if ((*rec_len = recvfrom(sock, buffer, DNS_SIZE, 0, (struct sockaddr *)addr, addr_len) <= 0)) {
+    *rec_len = recvfrom(sock, buffer, DNS_SIZE, 0, (struct sockaddr *)addr, addr_len);
+    if (*rec_len <= 0) {
         return E_PKT_REC;
     }
     return EXIT_OK;

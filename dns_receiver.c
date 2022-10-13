@@ -111,7 +111,7 @@ int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host) {
     string_t base_host_string;
     str_create_empty(&base_host_string);
     str_append_string(&base_host_string, base_host);
-    // +1 for null byte
+    // remove base_host from the end
     *(buffer + strlen((char *)buffer) - (base_host_string.length)) = '\0';
     str_free(&base_host_string);
 
@@ -128,7 +128,7 @@ int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host) {
     return EXIT_OK;
 }
 
-int send_ack_response(unsigned char *buffer, unsigned int id, socklen_t length) {
+int send_ack_response(unsigned char *buffer, unsigned int id) {
     memset(buffer, 0, DNS_SIZE);
     construct_dns_header((unsigned char *)buffer, id, 0);
 //    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
@@ -232,8 +232,8 @@ int main(int argc, char *argv[]) {
 
         unsigned long n_chunks;
         get_info_from_first_packet(buffer + sizeof(struct DNSHeader), &n_chunks, &dst_file_path);
-        if (send_ack_response(buffer, 0, addr_len)) return E_INT;
-
+        if (send_ack_response(buffer, 0)) return E_INT;
+        // receive data
         for (int i = 0; i < n_chunks; i++) {
             if (get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len)) return E_INT;
             dns_header = (struct DNSHeader *)&buffer;
@@ -247,7 +247,7 @@ int main(int argc, char *argv[]) {
             str_free(&data);
             if (str_create_empty(&data)) return E_INT;
 
-            if (send_ack_response(buffer, id, addr_len)) return E_INT;
+            if (send_ack_response(buffer, id)) return E_INT;
         }
         str_free(&data);
 
@@ -260,15 +260,16 @@ int main(int argc, char *argv[]) {
         if (str_append_string(&dst_filepath_string, dst_file_path)) return E_INT;
         FILE *ptr;
         if (open_file(dst_filepath_string.ptr, "wb", &ptr)) return E_OPEN_FILE;
-        printf("Writing to file\n");
+        printf("Writing to file %s\n", dst_filepath_string.ptr);
         fwrite(all_data.ptr, 1, all_data.length, ptr);
         fclose(ptr);
         str_free(&all_data);
+        str_free(&dst_filepath_string);
+        str_free(&all_encoded_data);
     }
 
-
-    printf("closing socket\n");
+    printf("Closing socket\n");
     close(sock_fd);
 
-    return 0;
+    return EXIT_OK;
 }

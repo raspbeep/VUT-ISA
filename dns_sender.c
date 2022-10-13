@@ -226,6 +226,8 @@ int read_src(string_t *buffer) {
     while((res = read(0, &c, 1)) == 1) {
         if (str_append_char(buffer, (char)c)) return E_INT;
     }
+    // for valgrind
+    fflush(fptr);
     fclose(fptr);
     if (res == 0) return EXIT_OK;
     return E_RD_FILE;
@@ -440,7 +442,8 @@ int main(int argc, char *argv[]) {
     printf("Length base16: %lu\n", encoded_string.length);
     string_t *chunks = NULL;
     unsigned long n_chunks;
-    split_into_chunks(&encoded_string, &chunks, &n_chunks);
+    result = split_into_chunks(&encoded_string, &chunks, &n_chunks);
+    if (!result) send_packets(&chunks, n_chunks);
 
     str_free(&encoded_string);
     str_free(&buffer);
@@ -448,5 +451,5 @@ int main(int argc, char *argv[]) {
     str_free(&args.formatted_base_host_string);
     close(sock_fd);
 
-    return send_packets(&chunks, n_chunks);
+    return EXIT_OK;
 }
