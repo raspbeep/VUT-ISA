@@ -320,12 +320,6 @@ int init_connection() {
         return E_SOCK_CRT;
     }
 
-//    struct timeval timeout;
-//    timeout.tv_sec = 1;
-//    timeout.tv_usec = 1;
-//    if(setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-//        return E_TIMEOUT;
-//    }
     return EXIT_OK;
 }
 
@@ -390,6 +384,7 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
     ssize_t rec_len;
 
     if (init_connection()) return E_INIT_CONN;
+    if (set_timeout(sock_fd)) return E_INT;
 
     if (send_first_info_packet(n_chunks, buffer, &pos, &rec_len)) return E_PKT_SEND;
 
@@ -398,7 +393,7 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
         pos = 0;
         memset(buffer, 0, sizeof(buffer));
         // create header and shift `pos`
-        construct_dns_header(buffer, chunk_n, 1);
+        construct_dns_header(buffer, chunk_n + 1, 1);
         pos += sizeof(struct DNSHeader);
 
         // copy data into buffer and shift `pos`
@@ -416,7 +411,8 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
         // receive answer
         if (get_packet(sock_fd, &serv_addr, buffer, &rec_len, &addr_len)) return E_PKT_REC;
     }
-    printf("cleaning chunks");
+
+
     free_chunks(chunks, n_chunks);
     return 0;
 }
@@ -443,7 +439,14 @@ int main(int argc, char *argv[]) {
     string_t *chunks = NULL;
     unsigned long n_chunks;
     result = split_into_chunks(&encoded_string, &chunks, &n_chunks);
-    if (!result) send_packets(&chunks, n_chunks);
+    if (!result) {
+        if (send_packets(&chunks, n_chunks)) {
+            str_free(&args.checked_base_host);
+            str_free(&args.formatted_base_host_string);
+            close(sock_fd);
+            return handle_error(E_TIMEOUT);
+        }
+    }
 
     str_free(&encoded_string);
     str_free(&buffer);

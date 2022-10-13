@@ -128,14 +128,13 @@ int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host) {
     return EXIT_OK;
 }
 
-int send_ack_response(unsigned char *buffer, unsigned int id) {
-    memset(buffer, 0, DNS_SIZE);
-    construct_dns_header((unsigned char *)buffer, id, 0);
-//    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
-//    dns_header->ans_count = htons(1);
-    int l = sizeof(struct DNSHeader);
+int send_ack_response(unsigned char *buffer, unsigned int id, ssize_t rec_len) {
+    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
+    dns_header->qr = 1;
+    dns_header->r_code = 3;
+    int new_len = (int)rec_len;
 
-    if (send_packet(sock_fd, &client_addr, buffer, l)) return E_PKT_SEND;
+    if (send_packet(sock_fd, &client_addr, buffer, new_len)) return E_PKT_SEND;
     return EXIT_OK;
 }
 
@@ -183,13 +182,6 @@ int init_connection() {
     printf("opening UDP socket(...)\n");
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) return E_SOCK_CRT;
 
-    //    struct timeval timeout;
-    //    timeout.tv_sec = 1;
-    //    timeout.tv_usec = 1;
-    //    if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-    //        return E_TIMEOUT;
-    //    }
-
     printf("binding with the port %d (%d)\n",ntohs(serv_addr.sin_port), serv_addr.sin_port);
 
     if (bind(sock_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) return E_BIND;
@@ -197,7 +189,13 @@ int init_connection() {
     return EXIT_OK;
 }
 
+void sigint_handler(int sig) {
+    printf("\nCTRL-C pressed(%d)\n", sig);
+    exit(EXIT_OK);
+}
+
 int main(int argc, char *argv[]) {
+    signal(SIGINT, sigint_handler);
     unsigned char buffer[DNS_SIZE];
     char *dst_file_path = NULL;
 
@@ -209,7 +207,6 @@ int main(int argc, char *argv[]) {
         }
         return E_INV_ARGS;
     }
-    printf("Starting\n");
     if (init_connection()) return E_INIT_CONN;
     while (1) {
         string_t dst_filepath_string;
@@ -232,7 +229,7 @@ int main(int argc, char *argv[]) {
 
         unsigned long n_chunks;
         get_info_from_first_packet(buffer + sizeof(struct DNSHeader), &n_chunks, &dst_file_path);
-        if (send_ack_response(buffer, 0)) return E_INT;
+        if (send_ack_response(buffer, 0, rec_len)) return E_INT;
         // receive data
         for (int i = 0; i < n_chunks; i++) {
             if (get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len)) return E_INT;
@@ -247,7 +244,7 @@ int main(int argc, char *argv[]) {
             str_free(&data);
             if (str_create_empty(&data)) return E_INT;
 
-            if (send_ack_response(buffer, id)) return E_INT;
+            if (send_ack_response(buffer, id, rec_len)) return E_INT;
         }
         str_free(&data);
 
@@ -267,9 +264,4 @@ int main(int argc, char *argv[]) {
         str_free(&dst_filepath_string);
         str_free(&all_encoded_data);
     }
-
-    printf("Closing socket\n");
-    close(sock_fd);
-
-    return EXIT_OK;
 }

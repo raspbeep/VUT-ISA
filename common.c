@@ -7,11 +7,13 @@
  *
  * @brief
  */
+#include <sys/socket.h>
 
 #include <stdio.h>
-#include <sys/socket.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
+
 #include "errors.h"
 #include "common.h"
 
@@ -34,6 +36,8 @@ void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_que
     header->rd = 0;                             // no recursion
     header->ra = 0;                             // no recursion
     header->z = 0;                              // no special use
+    header->ad = 0;                             // no authenticated data
+    header->cd = 0;                             // checking disabled
     header->r_code = 0;                         // no error
 
     header->q_count = htons(n_questions);       // 1 question
@@ -62,9 +66,30 @@ int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int p
 }
 
 int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len) {
-    *rec_len = recvfrom(sock, buffer, DNS_SIZE, 0, (struct sockaddr *)addr, addr_len);
-    if (*rec_len <= 0) {
-        return E_PKT_REC;
+    if ((*rec_len = recvfrom(sock, buffer, DNS_SIZE, 0, (struct sockaddr *)addr, addr_len)) <= 0) {
+        if (errno == EAGAIN) {
+            return E_TIMEOUT;
+        } else {
+            return E_PKT_REC;
+        }
+    }
+    return EXIT_OK;
+}
+
+int set_timeout(int sock_fd) {
+    struct timeval timeout = {TIMEOUT_S,0};
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0 ||
+        setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+        return E_TIMEOUT;
+    }
+    return EXIT_OK;
+}
+
+int unset_timeout(int sock_fd) {
+    struct timeval timeout = {0,0};
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0 ||
+        setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+        return E_TIMEOUT;
     }
     return EXIT_OK;
 }
@@ -115,10 +140,9 @@ int handle_error(const int err_n) {
         case E_BIND:
             fprintf(stderr, "Err: \n");
             return E_BIND;
-//        case E_TIMEOUT:
-//            fprintf(stderr, "Err: \n");
-//            // invalid number of parameters
-//            return E_TIMEOUT;
+        case E_TIMEOUT:
+            fprintf(stderr, "Err: Timeout reached\n");
+            return E_TIMEOUT;
         case E_NM_SRV:
             fprintf(stderr, "Err: \n");
             return E_NM_SRV;
