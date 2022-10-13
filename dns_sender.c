@@ -325,7 +325,7 @@ int init_connection() {
 
 int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos) {
     // format of first packet
-    // ||HEADER(id=0, n_question=1) || QUESTION n_chunks.dst_filepath.base-host-domain.tld || question info ||
+    // ||HEADER(id=0, n_question=1) || QUERY n_chunks.dst_filepath.base-host-domain.tld || question info ||
     memset(buffer, 0, DNS_SIZE);
     int id = 0;
     construct_dns_header((buffer), id, 1);

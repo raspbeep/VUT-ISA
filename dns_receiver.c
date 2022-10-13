@@ -86,9 +86,7 @@ int check_dst_filepath(char *dst_filepath, string_t *filepath_string) {
         if (str_append_char(filepath_string, '/')) return E_INT;
     }
 
-    // folder is not writeable
     // need this check for stat
-    // TODO: do I need access to all subdirs and files in them?
     if (access(filepath_string->ptr, W_OK)) return E_INT;
 
     // check if it is a folder
@@ -96,8 +94,7 @@ int check_dst_filepath(char *dst_filepath, string_t *filepath_string) {
     if (stat(filepath_string->ptr, &stat_res) != 0)
         return 0;
     if (!S_ISDIR(stat_res.st_mode)) {
-        // TODO: not a directory error
-        return E_INT;
+        return handle_error(E_NOT_DIR);
     }
     return EXIT_OK;
 }
@@ -223,24 +220,31 @@ int main(int argc, char *argv[]) {
         if (str_create_empty(&data)) return E_INT;
 
         string_t all_encoded_data;
-        str_create_empty(&all_encoded_data);
+        if (str_create_empty(&all_encoded_data)) return E_INT;
 
         ssize_t rec_len;
         if (get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len)) return E_INT;
 
         unsigned long n_chunks;
-        get_info_from_first_packet(buffer + sizeof(struct DNSHeader), &n_chunks, &dst_file_path);
+        if (get_info_from_first_packet(buffer + sizeof(struct DNSHeader), &n_chunks, &dst_file_path)) {
+            return E_INT;
+        }
         if (send_ack_response(buffer, 0, rec_len)) return E_INT;
         // receive data
+        if (set_timeout(sock_fd)) return E_SET_TIMEOUT;
         for (int i = 0; i < n_chunks; i++) {
-            if (get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len)) return E_INT;
+            res = get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len);
+            // receive failed on timeout
+            if (res == E_TIMEOUT) {
+                break;
+            }
             dns_header = (struct DNSHeader *)&buffer;
             unsigned long pos = sizeof(struct DNSHeader);
             unsigned id = ntohs(dns_header->id);
 
             // remove label length octets and remove base host suffix
             if (get_buffer_data(buffer + pos, &data, args.base_host)) return E_INT;
-            str_append_strings(&all_encoded_data, &data);
+            if (str_append_strings(&all_encoded_data, &data)) return E_INT;
 
             str_free(&data);
             if (str_create_empty(&data)) return E_INT;
@@ -249,20 +253,24 @@ int main(int argc, char *argv[]) {
         }
         str_free(&data);
 
-        // decode all data
-        string_t all_data;
-        if (str_create_empty(&all_data)) return E_INT;
-        str_base16_decode(&all_encoded_data, &all_data);
-        printf("Length decoded: %lu\n", all_data.length);
+        // if all data were received, otherwise continue and wait for another file
+        if (res != E_TIMEOUT) {
+            // decode all data
+            string_t all_data;
+            if (str_create_empty(&all_data)) return E_INT;
+            if (str_base16_decode(&all_encoded_data, &all_data)) return E_INT;
+            printf("Length decoded: %lu\n", all_data.length);
 
-        if (str_append_string(&dst_filepath_string, dst_file_path)) return E_INT;
-        FILE *ptr;
-        if (open_file(dst_filepath_string.ptr, "wb", &ptr)) return E_OPEN_FILE;
-        printf("Writing to file %s\n", dst_filepath_string.ptr);
-        fwrite(all_data.ptr, 1, all_data.length, ptr);
-        fclose(ptr);
-        str_free(&all_data);
-        str_free(&dst_filepath_string);
+            if (str_append_string(&dst_filepath_string, dst_file_path)) return E_INT;
+            FILE *ptr;
+            if (open_file(dst_filepath_string.ptr, "wb", &ptr)) return E_OPEN_FILE;
+            printf("Writing to file %s\n", dst_filepath_string.ptr);
+            fwrite(all_data.ptr, 1, all_data.length, ptr);
+            fclose(ptr);
+            str_free(&all_data);
+        }
         str_free(&all_encoded_data);
+        str_free(&dst_filepath_string);
+        if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
     }
 }

@@ -26,7 +26,7 @@
 // insufficient permission for writing to output file
 #define E_RD_PERM 7
 // insufficient permission for reading input file
-#define E_WR_PERM 8
+#define E_NOT_DIR 8
 // error occurred opening source or destination file
 #define E_OPEN_FILE 9
 // error occurred reading input file
@@ -52,3 +52,4 @@
 #define E_SET_TIMEOUT 19
 // error scanning /etc/resolv.conf
 #define E_NM_SRV 20
+

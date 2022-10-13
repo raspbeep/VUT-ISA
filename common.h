@@ -17,7 +17,7 @@
 // two bits out of eight are reserved for reference distinction
 #define LABEL_SIZE 63
 #define TIMEOUT_S 3
-#define QUESTION 0
+#define QUERY 0
 #define ANSWER 1
 #define NXDOMAIN 3
 

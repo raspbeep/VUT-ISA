@@ -72,7 +72,7 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
 
 int init_connection();
 
-int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos, ssize_t *rec_len);
+int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos);
 
 int send_packets(string_t **chunks, unsigned long n_chunks);
 

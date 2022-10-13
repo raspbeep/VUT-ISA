@@ -126,8 +126,7 @@ int str_base_host_label_format(string_t *src, string_t *dst) {
 }
 
 // copies NULL terminated content in buffer
-int str_copy_to_buffer(string_t *src, unsigned char *buffer) {
+void str_copy_to_buffer(string_t *src, unsigned char *buffer) {
     memcpy(buffer, src->ptr, src->length);
     buffer[src->length] = '\0';
-    return EXIT_OK;
 }

@@ -29,7 +29,7 @@ void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_que
     // 16b aligned fields
     header->id = (unsigned short) htons(id);
 
-    header->qr = 0;                             // query
+    header->qr = QUERY;                         // query
     header->opcode = 0;                         // standard query
     header->aa = 0;                             // not authoritative
     header->tc = 0;                             // not truncated
@@ -184,9 +184,9 @@ int handle_error(const int err_n) {
         case E_POS_ARG:
             fprintf(stderr, "Err: Invalid number of positional arguments\n");
             return E_POS_ARG;
-//        case E_WR_PERM:
-//            fprintf(stderr, "Err: \n");
-//            return E_WR_PERM;
+        case E_NOT_DIR:
+            fprintf(stderr, "Err: DST_FILEPATH is not a directory\n");
+            return E_NOT_DIR;
         case E_OPEN_FILE:
             fprintf(stderr, "Err: Unable to open file\n");
             return E_OPEN_FILE;
