@@ -48,5 +48,7 @@
 #define E_BIND 17
 // error timeout reached
 #define E_TIMEOUT 18
+// error setting timeout(setsockopt)
+#define E_SET_TIMEOUT 19
 // error scanning /etc/resolv.conf
-#define E_NM_SRV 19
+#define E_NM_SRV 20

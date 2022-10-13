@@ -130,8 +130,9 @@ int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host) {
 
 int send_ack_response(unsigned char *buffer, unsigned int id, ssize_t rec_len) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
-    dns_header->qr = 1;
-    dns_header->r_code = 3;
+    dns_header->qr = ANSWER;
+    // response `domain not found` signals ack for given chunk
+    dns_header->r_code = NXDOMAIN;
     int new_len = (int)rec_len;
 
     if (send_packet(sock_fd, &client_addr, buffer, new_len)) return E_PKT_SEND;

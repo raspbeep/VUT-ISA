@@ -17,6 +17,9 @@
 // two bits out of eight are reserved for reference distinction
 #define LABEL_SIZE 63
 #define TIMEOUT_S 3
+#define QUESTION 0
+#define ANSWER 1
+#define NXDOMAIN 3
 
 struct DNSHeader {
     unsigned short id: 16;      // identification
@@ -52,6 +55,9 @@ void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_que
 int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len);
 
 int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int pos);
+
+int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
+        int pos, ssize_t *rec_len, socklen_t *addr_len, int id);
 
 int open_file(const char *path, const char *read_mode, FILE **fptr);
 

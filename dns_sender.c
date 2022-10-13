@@ -323,11 +323,12 @@ int init_connection() {
     return EXIT_OK;
 }
 
-int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos, ssize_t *rec_len) {
+int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos) {
     // format of first packet
     // ||HEADER(id=0, n_question=1) || QUESTION n_chunks.dst_filepath.base-host-domain.tld || question info ||
     memset(buffer, 0, DNS_SIZE);
-    construct_dns_header((buffer), 0, 1);
+    int id = 0;
+    construct_dns_header((buffer), id, 1);
     *pos += sizeof(struct DNSHeader);
 
     char b[LABEL_SIZE + 1] = {0};
@@ -373,8 +374,12 @@ int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *p
     construct_dns_question(buffer + *pos);
     *pos += sizeof(struct Question);
 
-    if (send_packet(sock_fd, &serv_addr, buffer, *pos)) return E_PKT_SEND;
-    if (get_packet(sock_fd, &serv_addr, buffer, rec_len, &addr_len)) return E_PKT_REC;
+    ssize_t rec_len;
+    int res;
+    if ((res = send_and_wait(sock_fd, &serv_addr, buffer, *pos, &rec_len,
+                  &addr_len, id)) != 0) {
+        return res;
+    }
     return EXIT_OK;
 }
 
@@ -386,11 +391,12 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
     if (init_connection()) return E_INIT_CONN;
     if (set_timeout(sock_fd)) return E_INT;
 
-    if (send_first_info_packet(n_chunks, buffer, &pos, &rec_len)) return E_PKT_SEND;
+    if (send_first_info_packet(n_chunks, buffer, &pos)) return E_PKT_SEND;
 
     for (unsigned int chunk_n = 0; chunk_n < n_chunks; chunk_n++) {
         //  || DNS header || QNAME | QTYPE | QCLASS ||
         pos = 0;
+        int chunk_id = (int)(chunk_n + 1);
         memset(buffer, 0, sizeof(buffer));
         // create header and shift `pos`
         construct_dns_header(buffer, chunk_n + 1, 1);
@@ -406,15 +412,16 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
         // create question info and shift `pos`
         construct_dns_question(buffer + pos);
         pos += sizeof(struct Question);
-        // send query
-        if (send_packet(sock_fd, &serv_addr, buffer, pos)) return E_PKT_SEND;
-        // receive answer
-        if (get_packet(sock_fd, &serv_addr, buffer, &rec_len, &addr_len)) return E_PKT_REC;
+
+        int res;
+        if ((res = send_and_wait(sock_fd, &serv_addr, buffer, pos, &rec_len,
+                                 &addr_len, chunk_id))) {
+            free_chunks(chunks, n_chunks);
+            return res;
+        }
     }
-
-
     free_chunks(chunks, n_chunks);
-    return 0;
+    return EXIT_OK;
 }
 
 int main(int argc, char *argv[]) {
@@ -439,12 +446,12 @@ int main(int argc, char *argv[]) {
     string_t *chunks = NULL;
     unsigned long n_chunks;
     result = split_into_chunks(&encoded_string, &chunks, &n_chunks);
-    if (!result) {
-        if (send_packets(&chunks, n_chunks)) {
+    if (result == EXIT_OK) {
+        if ((result = send_packets(&chunks, n_chunks)) != EXIT_OK) {
             str_free(&args.checked_base_host);
             str_free(&args.formatted_base_host_string);
             close(sock_fd);
-            return handle_error(E_TIMEOUT);
+            return result;
         }
     }
 
