@@ -22,13 +22,14 @@
 #include "common.h"
 #include "errors.h"
 #include "dyn_string.h"
+#include "dns_receiver_events.h"
 
 struct InputArgs {
     // base domain for all communications
     char *base_host;
     // output file path on destination server
     char *dst_filepath;
-};
+} args;
 
 int sock_fd;
 struct sockaddr_in serv_addr, client_addr;
@@ -42,15 +43,14 @@ void print_help() {
     );
 }
 
-int parse_args(int argc, char *argv[], struct InputArgs* args) {
+int parse_args(int argc, char *argv[]) {
     if (argc < 3) {
         handle_error(E_NUM_ARGS);
         print_help();
         return E_NUM_ARGS;
     }
 
-    // clear the struct values
-    memset(args, 0, sizeof(struct InputArgs));
+    memset(&args, 0, sizeof(struct InputArgs));
     int positional_arg_counter = 0;
 
     for (size_t i = 1; i < argc; ++i) {
@@ -60,11 +60,11 @@ int parse_args(int argc, char *argv[], struct InputArgs* args) {
             return EXIT_HELP;
         }
         if (!positional_arg_counter) {
-            args->base_host = argv[i];
+            args.base_host = argv[i];
             positional_arg_counter++;
             continue;
         } else if (positional_arg_counter == 1) {
-            args->dst_filepath = argv[i];
+            args.dst_filepath = argv[i];
             positional_arg_counter++;
             continue;
         } else {
@@ -99,12 +99,11 @@ int check_dst_filepath(char *dst_filepath, string_t *filepath_string) {
     return EXIT_OK;
 }
 
-int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host) {
+int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host, string_t *file_path_string) {
     unsigned long label_length_octet;
 
     unsigned long count = 0, pos;
 
-    // TODO: implement in a better way
     string_t base_host_string;
     str_create_empty(&base_host_string);
     str_append_string(&base_host_string, base_host);
@@ -112,27 +111,45 @@ int get_buffer_data(unsigned char *buffer, string_t *data, char *base_host) {
     *(buffer + strlen((char *)buffer) - (base_host_string.length)) = '\0';
     str_free(&base_host_string);
 
+    // for interface function
+    string_t chunk_data;
+    if (str_create_empty(&chunk_data)) return E_INT;
+
+
     label_length_octet = (unsigned char)*buffer;
+    int first = 1;
     while (label_length_octet != '\0') {
+        if (first) {
+            first = 0;
+        } else {
+            if (str_append_char(&chunk_data, '.')) return E_INT;
+        }
         label_length_octet = (unsigned char)*(buffer+count);
         count++;
         pos = count;
         for (unsigned int i = count; i < pos + label_length_octet; i++) {
             if (str_append_char(data, *((char *)buffer + count))) return E_INT;
+            if (str_append_char(&chunk_data, *((char *)buffer + count))) return E_INT;
             count++;
         }
     }
+    *(chunk_data.ptr + chunk_data.length - 1) = '\0';
+    chunk_data.length--;
+    if (str_append_string(&chunk_data, base_host)) return E_INT;
+    // call interface function
+    dns_receiver__on_query_parsed(file_path_string->ptr, chunk_data.ptr);
+    str_free(&chunk_data);
+
     return EXIT_OK;
 }
 
-int send_ack_response(unsigned char *buffer, unsigned int id, ssize_t rec_len) {
+int send_ack_response(unsigned char *buffer, ssize_t rec_len) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
     dns_header->qr = ANSWER;
     // response `domain not found` signals ack for given chunk
     dns_header->r_code = NXDOMAIN;
-    int new_len = (int)rec_len;
 
-    if (send_packet(sock_fd, &client_addr, buffer, new_len)) return E_PKT_SEND;
+    if (send_packet(sock_fd, &client_addr, buffer, (int)rec_len)) return E_PKT_SEND;
     return EXIT_OK;
 }
 
@@ -197,9 +214,8 @@ int main(int argc, char *argv[]) {
     unsigned char buffer[DNS_SIZE];
     char *dst_file_path = NULL;
 
-    struct InputArgs args;
     int res;
-    if ((res = parse_args(argc, argv, &args) > EXIT_OK)) {
+    if ((res = parse_args(argc, argv) > EXIT_OK)) {
         if (res == EXIT_HELP) {
             return EXIT_OK;
         }
@@ -224,32 +240,40 @@ int main(int argc, char *argv[]) {
 
         ssize_t rec_len;
         if (get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len)) return E_INT;
-
+        dns_receiver__on_transfer_init((struct in_addr *)&client_addr.sin_addr);
         unsigned long n_chunks;
         if (get_info_from_first_packet(buffer + sizeof(struct DNSHeader), &n_chunks, &dst_file_path)) {
             return E_INT;
         }
-        if (send_ack_response(buffer, 0, rec_len)) return E_INT;
-        // receive data
+        if (str_append_string(&dst_filepath_string, dst_file_path)) return E_INT;
+        if (send_ack_response(buffer, rec_len)) return E_INT;
         if (set_timeout(sock_fd)) return E_SET_TIMEOUT;
+        // receive data
         for (int i = 0; i < n_chunks; i++) {
             res = get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len);
             // receive failed on timeout
             if (res == E_TIMEOUT) {
-                break;
+                res = get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len);
+                if (res == TIMEOUT_S) {
+                    // second timeout
+                    break;
+                }
             }
             dns_header = (struct DNSHeader *)&buffer;
             unsigned long pos = sizeof(struct DNSHeader);
             unsigned id = ntohs(dns_header->id);
 
+            // calling interface function
+            dns_receiver__on_chunk_received((struct in_addr *)&client_addr.sin_addr, dst_filepath_string.ptr,
+                                            (int)id, (int)(rec_len - pos - sizeof(struct Question)));
             // remove label length octets and remove base host suffix
-            if (get_buffer_data(buffer + pos, &data, args.base_host)) return E_INT;
+            if (get_buffer_data(buffer + pos, &data, args.base_host, &dst_filepath_string)) return E_INT;
+
             if (str_append_strings(&all_encoded_data, &data)) return E_INT;
 
             str_free(&data);
             if (str_create_empty(&data)) return E_INT;
-
-            if (send_ack_response(buffer, id, rec_len)) return E_INT;
+            if (send_ack_response(buffer, rec_len)) return E_INT;
         }
         str_free(&data);
 
@@ -259,18 +283,17 @@ int main(int argc, char *argv[]) {
             string_t all_data;
             if (str_create_empty(&all_data)) return E_INT;
             if (str_base16_decode(&all_encoded_data, &all_data)) return E_INT;
-            printf("Length decoded: %lu\n", all_data.length);
-
-            if (str_append_string(&dst_filepath_string, dst_file_path)) return E_INT;
+            dns_receiver__on_transfer_completed(dst_filepath_string.ptr, (int)all_data.length);
+            // write to destination file
             FILE *ptr;
             if (open_file(dst_filepath_string.ptr, "wb", &ptr)) return E_OPEN_FILE;
-            printf("Writing to file %s\n", dst_filepath_string.ptr);
             fwrite(all_data.ptr, 1, all_data.length, ptr);
             fclose(ptr);
             str_free(&all_data);
         }
         str_free(&all_encoded_data);
         str_free(&dst_filepath_string);
+
         if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
     }
 }

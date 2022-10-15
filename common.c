@@ -80,10 +80,10 @@ int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_
     return EXIT_OK;
 }
 
-int get_packet_id(unsigned char *buffer) {
+unsigned int get_packet_id(unsigned char *buffer) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
     if (dns_header->r_code != NXDOMAIN) return -1;
-    return ntohs(dns_header->id);
+    return (unsigned)ntohs(dns_header->id);
 }
 
 int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,

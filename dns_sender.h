@@ -11,6 +11,7 @@
 #pragma once
 
 #include <string.h>
+
 #include "dyn_string.h"
 
 
@@ -29,12 +30,40 @@ void print_help();
  */
 int check_base_host(string_t *base_host);
 
+/**
+ *
+ *
+ *
+ * @param
+ *
+ * @returns
+ */
 int format_base_host_string();
 
+/**
+ *
+ *
+ *
+ * @param
+ *
+ * @returns
+ */
 int find_ip_version(const char *src);
 
+/**
+ * Attempts to access, read and parse /etc/resolf.conf file. Looks for
+ *
+ */
 int scan_resolv_conf();
 
+/**
+ *
+ *
+ *
+ * @param
+ *
+ * @returns
+ */
 int parse_args(int argc, char *argv[]);
 
 /**
@@ -70,10 +99,28 @@ int read_src(string_t *buffer);
  */
 int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks);
 
+/**
+ * Initializes connection using global variables serv_addr, addr_len and sock_fd.
+ *
+ */
 int init_connection();
 
+/**
+ * Sends info about the transmitted file in the form of a DNS packet.
+ * Used format is: || HEADER || n_chunks.dst_filepath.base-host-domain.tld || question info ||
+ *
+ */
 int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos);
 
+/**
+ * Sends all packets to receiver. In case it does not receive ACK DNS answer, packet is
+ * retransmitted.
+ *
+ */
 int send_packets(string_t **chunks, unsigned long n_chunks);
 
+/**
+ *  Deallocates all data chunks
+ *
+ */
 void free_chunks(string_t **chunks, unsigned long n_chunks);

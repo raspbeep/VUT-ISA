@@ -21,13 +21,14 @@
 #include "errors.h"
 #include "common.h"
 #include "dyn_string.h"
+#include "dns_sender_events.h"
 
 struct InputArgs {
     // base domain for all communication
     char *base_host;
     // in a correct format e.g. `.example.com.`
     string_t checked_base_host;
-    // in dns format, e.g. `.example.com.`
+    // in dns format, e.g. `7example3com0`
     string_t formatted_base_host_string;
     // explicit remote DNS server
     char *upstream_dns_ip;
@@ -36,9 +37,11 @@ struct InputArgs {
     // if unspecified read from STDIN
     char *src_filepath;
 } args;
+bool u_flag = false;
 struct sockaddr_in serv_addr;
 socklen_t addr_len;
 int sock_fd;
+unsigned long total_len = 0;
 
 void print_help() {
     printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
@@ -157,7 +160,6 @@ int parse_args(int argc, char *argv[]) {
     memset(&args, 0, sizeof(struct InputArgs));
 
     int positional_arg_counter = 0;
-    bool u_flag = false;
 
     for (size_t i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--help")) {
@@ -219,6 +221,7 @@ int read_src(string_t *buffer) {
         }
         // occurred an error reading character
         if (!feof(fptr)) return E_RD_FILE;
+        total_len = buffer->length;
         return EXIT_OK;
     }
 
@@ -226,10 +229,11 @@ int read_src(string_t *buffer) {
     while((res = read(0, &c, 1)) == 1) {
         if (str_append_char(buffer, (char)c)) return E_INT;
     }
+    if (res == 0) return EXIT_OK;
     // for valgrind
     fflush(fptr);
     fclose(fptr);
-    if (res == 0) return EXIT_OK;
+    total_len = buffer->length;
     return E_RD_FILE;
 }
 
@@ -254,7 +258,12 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
     char c;
     int current_count;
     unsigned long chunk_count = 0;
+
+    // for calling interface function
+    string_t chunk_no_dns_format;
+
     while (count != data->length) {
+        if (str_create_empty(&chunk_no_dns_format)) return E_INT;
         current_count = 0;
         first = true;
         // copy of available data length
@@ -278,14 +287,18 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
                     // length is shorter than 63
                     c = (char)(data->length-count);
                 }
-                str_append_char(current, c);
+                if (str_append_char(current, c)) return E_INT;
+                // for calling interface function
+                if (!first) {
+                    if (str_append_char(&chunk_no_dns_format, '.')) return E_INT;
+                }
                 capacity_left--;
                 current_count++;
-
                 first = false;
             } else {
-
                 if (str_append_char(current, data->ptr[count])) return E_INT;
+                // for calling interface function
+                if (str_append_char(&chunk_no_dns_format, data->ptr[count])) return E_INT;
                 current_count++;
                 capacity_left--;
                 count++;
@@ -293,6 +306,12 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
         }
         // concatenate with base host
         if (str_append_strings(current, &args.formatted_base_host_string)) return E_INT;
+        // concatenate with base host in dot format
+        if (str_append_strings(&chunk_no_dns_format, &args.checked_base_host)) return E_INT;
+        // remove last dot
+        *(chunk_no_dns_format.ptr + chunk_no_dns_format.length - 1) = '\0';
+        dns_sender__on_chunk_encoded(args.src_filepath, (int)chunk_count + 1,
+                                     chunk_no_dns_format.ptr);
 
         // a new chunk will be needed
         if (count != data->length) {
@@ -303,6 +322,8 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
             if (!ptr) return E_INT;
             *chunks = ptr;
             if (str_create_empty((string_t *)(*chunks + (chunk_count)))) return E_INT;
+            str_free(&chunk_no_dns_format);
+            if (str_create_empty(&chunk_no_dns_format)) return E_INT;
         }
     }
     *n_chunks = chunk_count + 1;
@@ -325,7 +346,6 @@ int init_connection() {
 
 int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos) {
     // format of first packet
-    // ||HEADER(id=0, n_question=1) || QUERY n_chunks.dst_filepath.base-host-domain.tld || question info ||
     memset(buffer, 0, DNS_SIZE);
     int id = 0;
     construct_dns_header((buffer), id, 1);
@@ -390,13 +410,13 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
 
     if (init_connection()) return E_INIT_CONN;
     if (set_timeout(sock_fd)) return E_INT;
-
+    dns_sender__on_transfer_init((struct in_addr *)&serv_addr.sin_addr);
     if (send_first_info_packet(n_chunks, buffer, &pos)) return E_PKT_SEND;
 
     for (unsigned int chunk_n = 0; chunk_n < n_chunks; chunk_n++) {
         //  || DNS header || QNAME | QTYPE | QCLASS ||
         pos = 0;
-        int chunk_id = (int)(chunk_n + 1);
+        int chunk_id = (int)(chunk_n + 1)%(1<<16);
         memset(buffer, 0, sizeof(buffer));
         // create header and shift `pos`
         construct_dns_header(buffer, chunk_n + 1, 1);
@@ -413,6 +433,9 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
         construct_dns_question(buffer + pos);
         pos += sizeof(struct Question);
 
+        // calling interface function
+        dns_sender__on_chunk_sent((struct in_addr *)&serv_addr.sin_addr,
+                args.dst_filepath, chunk_id, (int)current_chunk->length);
         int res;
         if ((res = send_and_wait(sock_fd, &serv_addr, buffer, pos, &rec_len,
                                  &addr_len, chunk_id))) {
@@ -420,6 +443,7 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
             return res;
         }
     }
+    dns_sender__on_transfer_completed(args.dst_filepath, (int)total_len);
     free_chunks(chunks, n_chunks);
     return EXIT_OK;
 }
@@ -450,6 +474,9 @@ int main(int argc, char *argv[]) {
         if ((result = send_packets(&chunks, n_chunks)) != EXIT_OK) {
             str_free(&args.checked_base_host);
             str_free(&args.formatted_base_host_string);
+            if (!u_flag) {
+                free(args.upstream_dns_ip);
+            }
             close(sock_fd);
             return result;
         }
@@ -459,6 +486,9 @@ int main(int argc, char *argv[]) {
     str_free(&buffer);
     str_free(&args.checked_base_host);
     str_free(&args.formatted_base_host_string);
+    if (!u_flag) {
+        free(args.upstream_dns_ip);
+    }
     close(sock_fd);
 
     return EXIT_OK;
