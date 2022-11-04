@@ -52,4 +52,3 @@
 #define E_SET_TIMEOUT 19
 // error scanning /etc/resolv.conf
 #define E_NM_SRV 20
-

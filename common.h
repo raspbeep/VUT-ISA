@@ -65,4 +65,8 @@ int set_timeout(int sock_fd);
 
 int unset_timeout(int sock_fd);
 
+void char_base16_decode(unsigned char a, unsigned char b, unsigned char *c);
+
+void char_base16_encode(char c, char *a, char*b);
+
 int handle_error(int err_n);

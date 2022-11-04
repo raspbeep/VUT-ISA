@@ -90,10 +90,9 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
         int pos, ssize_t *rec_len, socklen_t *addr_len, int id) {
 
     int retries = 3;
-    int receive_res = 0;
-    int send_res = 0;
+    int receive_res;
+    int send_res;
 
-    // TODO: bad condition
     while (retries) {
         send_res = send_packet(sock_fd, addr, buffer, pos);
         if (send_res != EXIT_OK) {
@@ -135,6 +134,19 @@ int unset_timeout(int sock_fd) {
         return E_SET_TIMEOUT;
     }
     return EXIT_OK;
+}
+
+// assigns base16 decoded src to dst
+void char_base16_decode(unsigned char a, unsigned char b, unsigned char *c) {
+    // concatenate two chars into one
+    *c = (char)((((a) - 'a') * 16 ) + b - 'a');
+}
+
+// assigns base16 encoded src to dst
+void char_base16_encode(char c, char *a, char *b) {
+    // split one char into two
+    *a = (char)(((unsigned char)(c) >> 4) + 'a');
+    *b = (char)((unsigned char)(c & 0x0f) + 'a');
 }
 
 int handle_error(const int err_n) {

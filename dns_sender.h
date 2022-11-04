@@ -28,17 +28,7 @@ void print_help();
  *
  * @returns E_HOST_LEN for invalid length, return EXIT_OK(0) otherwise
  */
-int check_base_host(string_t *base_host);
 
-/**
- *
- *
- *
- * @param
- *
- * @returns
- */
-int format_base_host_string();
 
 /**
  *
@@ -79,31 +69,12 @@ int parse_args(int argc, char *argv[]);
  * insufficient for reading. E_RD_FILE is return when an error reading
  * input file occurred. Otherwise returns EXIT_OK(0).
  */
-int read_src(string_t *buffer);
 
 /**
- * Splits encoded data into chunks and converts into DNS format(e.g. 3aaa2bb1c0)
- * to use the maximum available space in queried name. The length inserted
- * into each packet depends on the length of given base_host(the longer the base
- * host name, the smaller the resulting capacity). Therefore, the maximum set
- * length for base host name is 252B(maximum allowed is 255 - 1 zero length
- * octet at the end - 1B data length octet and - 1B data).
- *
- *
- * @param base_host base host to appended in DNS format to each QNAME
- * @param data all data to send
- * @param chunks pointer to array of data chunks to send
- * @param n_chunks number of chunks(packets) to send
- *
- * @returns
- */
-int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks);
-
-/**
- * Initializes connection using global variables receiver_addr, addr_len and sock_fd.
+ * Initializes socket and binds to it using global variables receiver_addr, addr_len and sock_fd.
  *
  */
-int init_connection();
+int init_socket();
 
 /**
  * Sends info about the transmitted file in the form of a DNS packet.
@@ -111,16 +82,3 @@ int init_connection();
  *
  */
 int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *pos);
-
-/**
- * Sends all packets to receiver. In case it does not receive ACK DNS answer, packet is
- * retransmitted.
- *
- */
-int send_packets(string_t **chunks, unsigned long n_chunks);
-
-/**
- *  Deallocates all data chunks
- *
- */
-void free_chunks(string_t **chunks, unsigned long n_chunks);
