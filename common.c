@@ -88,61 +88,33 @@ unsigned int get_packet_id(unsigned char *buffer) {
 
 int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
         int pos, ssize_t *rec_len, socklen_t *addr_len, int id) {
-    int res;
-    // attempt to send 1
-    res = send_packet(sock_fd, addr, buffer, pos);
-    if (res == EXIT_OK) {
-        // first send success
-        // attempt to receive 1
-        res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
-        if (res == EXIT_OK && get_packet_id(buffer) == id) {
-            // first receive success
-            return EXIT_OK;
-        } else if (res == E_TIMEOUT) {
-            // first receive failed on timeout
-            // attempt to receive 2
-            res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
-            if (res == EXIT_OK && get_packet_id(buffer) == id) {
-                // second receive success
-                return EXIT_OK;
-            } else {
-                // second receive fail
-                return E_PKT_REC;
-            }
-        } else {
-            // second receive failed on timeout
-            return E_PKT_REC;
+
+    int retries = 3;
+    int receive_res = 0;
+    int send_res = 0;
+
+    // TODO: bad condition
+    while (retries) {
+        send_res = send_packet(sock_fd, addr, buffer, pos);
+        if (send_res != EXIT_OK) {
+            retries--;
+            continue;
         }
-    } else if (res == E_TIMEOUT) {
-        // first send failed on timeout
-        // attempt to send 2
-        res = send_packet(sock_fd, addr, buffer, pos);
-        if (res == EXIT_OK) {
-            // second send success
-            // attempt to receive 1
-            res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
-            if (res == EXIT_OK && get_packet_id(buffer) == id) {
-                // first receive success
-                return EXIT_OK;
-            } else if (res == E_TIMEOUT) {
-                // first receive failed on timeout
-                // attempt to receive 2
-                res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
-                if (res == EXIT_OK && get_packet_id(buffer) == id) {
-                    // second receive success
-                    return EXIT_OK;
-                } else {
-                    // second receive fail
-                    return E_PKT_REC;
-                }
-            } else {
-                // second receive failed on timeout
-                return E_PKT_REC;
-            }
+        receive_res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
+        if (receive_res != EXIT_OK) {
+            retries--;
+            continue;
         }
-    } else {
-        // failed send because of error(not timeout)
-        return E_PKT_SEND;
+        break;
+    }
+    if (receive_res && send_res) {
+        return EXIT_OK;
+    }
+    if (receive_res) {
+        return handle_error(E_PKT_REC);
+    }
+    if (send_res) {
+        return handle_error(E_PKT_SEND);
     }
     return EXIT_OK;
 }

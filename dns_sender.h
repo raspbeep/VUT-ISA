@@ -100,7 +100,7 @@ int read_src(string_t *buffer);
 int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks);
 
 /**
- * Initializes connection using global variables serv_addr, addr_len and sock_fd.
+ * Initializes connection using global variables receiver_addr, addr_len and sock_fd.
  *
  */
 int init_connection();

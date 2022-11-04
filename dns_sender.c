@@ -38,10 +38,11 @@ struct InputArgs {
     char *src_filepath;
 } args;
 bool u_flag = false;
-struct sockaddr_in serv_addr;
+struct sockaddr_in receiver_addr;
 socklen_t addr_len;
 int sock_fd;
 unsigned long total_len = 0;
+int TIMEOUT_EN = 1;
 
 void print_help() {
     printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
@@ -331,10 +332,10 @@ int split_into_chunks(string_t *data, string_t **chunks, unsigned long *n_chunks
 }
 
 int init_connection() {
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
-    serv_addr.sin_port = htons(DNS_PORT);
+    memset(&receiver_addr, 0, sizeof(receiver_addr));
+    receiver_addr.sin_family = AF_INET;
+    receiver_addr.sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
+    receiver_addr.sin_port = htons(/*DNS_PORT*/1645);
 
     // create datagram socket
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -396,8 +397,8 @@ int send_first_info_packet(unsigned long n_chunks, unsigned char *buffer, int *p
 
     ssize_t rec_len;
     int res;
-    if ((res = send_and_wait(sock_fd, &serv_addr, buffer, *pos, &rec_len,
-                  &addr_len, id)) != 0) {
+    if ((res = send_and_wait(sock_fd, &receiver_addr, buffer, *pos, &rec_len,
+                             &addr_len, id)) != 0) {
         return res;
     }
     return EXIT_OK;
@@ -409,8 +410,11 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
     ssize_t rec_len;
 
     if (init_connection()) return E_INIT_CONN;
-    if (set_timeout(sock_fd)) return E_INT;
-    dns_sender__on_transfer_init((struct in_addr *)&serv_addr.sin_addr);
+    if (TIMEOUT_EN) {
+        if (set_timeout(sock_fd)) return E_INT;
+    }
+
+    dns_sender__on_transfer_init((struct in_addr *)&receiver_addr.sin_addr);
     if (send_first_info_packet(n_chunks, buffer, &pos)) return E_PKT_SEND;
 
     for (unsigned int chunk_n = 0; chunk_n < n_chunks; chunk_n++) {
@@ -434,10 +438,10 @@ int send_packets(string_t **chunks, unsigned long n_chunks) {
         pos += sizeof(struct Question);
 
         // calling interface function
-        dns_sender__on_chunk_sent((struct in_addr *)&serv_addr.sin_addr,
+        dns_sender__on_chunk_sent((struct in_addr *)&receiver_addr.sin_addr,
                 args.dst_filepath, chunk_id, (int)current_chunk->length);
         int res;
-        if ((res = send_and_wait(sock_fd, &serv_addr, buffer, pos, &rec_len,
+        if ((res = send_and_wait(sock_fd, &receiver_addr, buffer, pos, &rec_len,
                                  &addr_len, chunk_id))) {
             free_chunks(chunks, n_chunks);
             return res;

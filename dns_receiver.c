@@ -24,6 +24,8 @@
 #include "dyn_string.h"
 #include "dns_receiver_events.h"
 
+int TIMEOUT_EN = 1;
+
 struct InputArgs {
     // base domain for all communications
     char *base_host;
@@ -32,7 +34,7 @@ struct InputArgs {
 } args;
 
 int sock_fd;
-struct sockaddr_in serv_addr, client_addr;
+struct sockaddr_in receiver_addr, sender_addr;
 socklen_t addr_len;
 
 void print_help() {
@@ -149,7 +151,7 @@ int send_ack_response(unsigned char *buffer, ssize_t rec_len) {
     // response `domain not found` signals ack for given chunk
     dns_header->r_code = NXDOMAIN;
 
-    if (send_packet(sock_fd, &client_addr, buffer, (int)rec_len)) return E_PKT_SEND;
+    if (send_packet(sock_fd, &sender_addr, buffer, (int)rec_len)) return E_PKT_SEND;
     return EXIT_OK;
 }
 
@@ -187,20 +189,20 @@ int get_info_from_first_packet(unsigned char *buffer, long unsigned *chunk_n, ch
 }
 
 int init_connection() {
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    memset(&client_addr, 0, sizeof(client_addr));
+    memset(&receiver_addr, 0, sizeof(receiver_addr));
+    memset(&sender_addr, 0, sizeof(sender_addr));
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(DNS_PORT);
+    receiver_addr.sin_family = AF_INET;
+    receiver_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    receiver_addr.sin_port = htons(DNS_PORT);
 
     printf("opening UDP socket(...)\n");
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) return E_SOCK_CRT;
 
-    printf("binding with the port %d (%d)\n",ntohs(serv_addr.sin_port), serv_addr.sin_port);
+    printf("binding with the port %d (%d)\n", ntohs(receiver_addr.sin_port), receiver_addr.sin_port);
 
-    if (bind(sock_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) return E_BIND;
-    addr_len = sizeof(client_addr);
+    if (bind(sock_fd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) == -1) return E_BIND;
+    addr_len = sizeof(sender_addr);
     return EXIT_OK;
 }
 
@@ -239,21 +241,24 @@ int main(int argc, char *argv[]) {
         if (str_create_empty(&all_encoded_data)) return E_INT;
 
         ssize_t rec_len;
-        if (get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len)) return E_INT;
-        dns_receiver__on_transfer_init((struct in_addr *)&client_addr.sin_addr);
+        if (get_packet(sock_fd, &sender_addr, buffer, &rec_len, &addr_len)) return E_INT;
+        dns_receiver__on_transfer_init((struct in_addr *)&sender_addr.sin_addr);
         unsigned long n_chunks;
         if (get_info_from_first_packet(buffer + sizeof(struct DNSHeader), &n_chunks, &dst_file_path)) {
             return E_INT;
         }
         if (str_append_string(&dst_filepath_string, dst_file_path)) return E_INT;
         if (send_ack_response(buffer, rec_len)) return E_INT;
-        if (set_timeout(sock_fd)) return E_SET_TIMEOUT;
+        if (TIMEOUT_EN) {
+            if (set_timeout(sock_fd)) return E_SET_TIMEOUT;
+        }
+
         // receive data
         for (int i = 0; i < n_chunks; i++) {
-            res = get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len);
+            res = get_packet(sock_fd, &sender_addr, buffer, &rec_len, &addr_len);
             // receive failed on timeout
             if (res == E_TIMEOUT) {
-                res = get_packet(sock_fd, &client_addr, buffer, &rec_len, &addr_len);
+                res = get_packet(sock_fd, &sender_addr, buffer, &rec_len, &addr_len);
                 if (res == TIMEOUT_S) {
                     // second timeout
                     break;
@@ -263,11 +268,15 @@ int main(int argc, char *argv[]) {
             unsigned long pos = sizeof(struct DNSHeader);
             unsigned id = ntohs(dns_header->id);
 
-            // calling interface function
-            dns_receiver__on_chunk_received((struct in_addr *)&client_addr.sin_addr, dst_filepath_string.ptr,
-                                            (int)id, (int)(rec_len - pos - sizeof(struct Question)));
+//            // calling interface function
+//            dns_receiver__on_chunk_received((struct in_addr *)&sender_addr.sin_addr, dst_filepath_string.ptr,
+//                                            (int)id, (int)(rec_len - pos - sizeof(struct Question)));
             // remove label length octets and remove base host suffix
             if (get_buffer_data(buffer + pos, &data, args.base_host, &dst_filepath_string)) return E_INT;
+
+            // calling interface function
+            dns_receiver__on_chunk_received((struct in_addr *)&sender_addr.sin_addr, dst_filepath_string.ptr,
+                                            (int)id, (int)data.length);
 
             if (str_append_strings(&all_encoded_data, &data)) return E_INT;
 
@@ -294,6 +303,8 @@ int main(int argc, char *argv[]) {
         str_free(&all_encoded_data);
         str_free(&dst_filepath_string);
 
-        if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
+        if (TIMEOUT_EN) {
+            if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
+        }
     }
 }
