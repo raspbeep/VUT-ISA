@@ -1,5 +1,5 @@
 /**
- *
+ *  common
  *
  * Copyright 2022 xkrato61 Pavel Kratochvil
  *
@@ -9,16 +9,26 @@
  */
 
 #pragma once
+
 #include <arpa/inet.h>
 #include <stdio.h>
+
+// default DNS port
 #define DNS_PORT 53
+// max size of DNS packet sent over UDP
 #define DNS_SIZE 512
+// max size for a FQDN(stored in DNS packet as QNAME)
 #define QNAME_SIZE 255
 // two bits out of eight are reserved for reference distinction
 #define LABEL_SIZE 63
+// timeout time in seconds
 #define TIMEOUT_S 3
+// retry count for sending and receiving packets
+#define RETRY_N 3
+// DNS kind of query codes
 #define QUERY 0
 #define ANSWER 1
+// DNS code for response(`No such name` error)
 #define NXDOMAIN 3
 
 struct DNSHeader {
@@ -48,25 +58,39 @@ struct Question {
     unsigned short q_class;     // 16b class of the query
 };
 
+
 void construct_dns_question(unsigned char *buffer);
+
 
 void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_questions);
 
-int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len);
-
-int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int pos);
-
-int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
-        int pos, ssize_t *rec_len, socklen_t *addr_len, int id);
 
 int open_file(const char *path, const char *read_mode, FILE **fptr);
 
+
+int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int pos);
+
+
+int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len);
+
+
+unsigned int get_packet_id(unsigned char *buffer);
+
+
+int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
+                  int pos, ssize_t *rec_len, socklen_t *addr_len, int id);
+
+
 int set_timeout(int sock_fd);
+
 
 int unset_timeout(int sock_fd);
 
+// assigns base16 decoded src to dst
 void char_base16_decode(unsigned char a, unsigned char b, unsigned char *c);
 
-void char_base16_encode(char c, char *a, char*b);
 
-int handle_error(int err_n);
+void char_base16_encode(char c, char *a, char *b);
+
+
+int handle_error(const int err_n);

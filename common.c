@@ -1,5 +1,5 @@
 /**
- *
+ *  common
  *
  * Copyright 2022 xkrato61 Pavel Kratochvil
  *
@@ -89,10 +89,10 @@ unsigned int get_packet_id(unsigned char *buffer) {
 int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
         int pos, ssize_t *rec_len, socklen_t *addr_len, int id) {
 
-    int retries = 3;
+    int retries = RETRY_N;
     int receive_res;
     int send_res;
-
+    // retry for number of retries if sending or receiving failed
     while (retries) {
         send_res = send_packet(sock_fd, addr, buffer, pos);
         if (send_res != EXIT_OK) {
@@ -101,6 +101,11 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
         }
         receive_res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
         if (receive_res != EXIT_OK) {
+            retries--;
+            continue;
+        }
+        // check received packet id
+        if (get_packet_id(buffer) != id) {
             retries--;
             continue;
         }
@@ -136,7 +141,6 @@ int unset_timeout(int sock_fd) {
     return EXIT_OK;
 }
 
-// assigns base16 decoded src to dst
 void char_base16_decode(unsigned char a, unsigned char b, unsigned char *c) {
     // concatenate two chars into one
     *c = (char)((((a) - 'a') * 16 ) + b - 'a');

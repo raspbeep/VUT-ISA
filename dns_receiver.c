@@ -1,27 +1,14 @@
 /**
- * dns_sender
+ * dns_receiver
  *
  * Copyright 2022 xkrato61 Pavel Kratochvil
  *
- * @file dns_sender.c
+ * @file dns_receiver.c
  *
  * @brief
  */
 
-
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
-
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-#include "common.h"
-#include "errors.h"
-#include "dns_receiver_events.h"
+#include "dns_receiver.h"
 
 struct InputArgs {
     // base domain for all communications
@@ -37,8 +24,11 @@ int sock_fd;
 struct sockaddr_in receiver_addr, sender_addr;
 socklen_t addr_len;
 FILE *out_ptr;
-int timeout = 0;
+// enable timeouts for sending and receiving packets
+int timeout = 1;
+// enable calling interface functions
 int interface = 1;
+// enable some debug messages
 int debug = 0;
 
 
@@ -77,7 +67,7 @@ int check_base_host() {
     // check label length
     // +1 to check until the `\0` at the end
     unsigned char c;
-    for (int i = 0; i < strlen(args.checked_base_host)+1; i++) {
+    for (int i = 0; i < strlen(args.checked_base_host) + 1; i++) {
         c = *(args.checked_base_host + i);
         if (c == '.' || c == '\0') {
             if (!count) continue;
@@ -229,7 +219,7 @@ int get_info_from_first_packet(const unsigned char *packet_buffer) {
         pos++;
     }
 
-    buffer[strlen((char *)buffer) - strlen(args.base_host) - 1] = '\0';
+    buffer[strlen((char *)buffer) - strlen(args.checked_base_host) - 1] = '\0';
 
     args.complete_dst_filepath = malloc(sizeof(char) * ((strlen((char *)buffer) + strlen(args.dst_filepath))));
 
@@ -265,10 +255,11 @@ int init_socket() {
 
 void sigint_handler(int sig) {
     printf("\nCTRL-C pressed(%d)\n", sig);
+    free(args.checked_base_host);
     exit(EXIT_OK);
 }
 
-void copy_buffers(unsigned char *dst, const unsigned char *src, ssize_t rec_len) {
+void copy_buffers(const unsigned char *src, unsigned char *dst, ssize_t rec_len) {
     memset(dst, 0, DNS_SIZE);
     for (int i = 0; i < rec_len; i++) {
         *(dst + i) = *(src + i);
@@ -283,13 +274,10 @@ void decode_buffer(unsigned char *src, unsigned char *dst) {
 }
 
 int check_base_host_suffix(char *str) {
-    if (!str || !args.checked_base_host)
+    if (!str || !args.checked_base_host) {
         return 0;
-    size_t data_length = strlen(str);
-    size_t suffix_length = strlen(args.checked_base_host);
-    char *str1 = str + data_length - suffix_length;
-    int res = strcmp(str1, args.checked_base_host);
-    return res;
+    }
+    return strcmp(str + strlen(str) - strlen(args.checked_base_host), args.checked_base_host);
 }
 
 int main(int argc, char *argv[]) {
@@ -350,7 +338,7 @@ int main(int argc, char *argv[]) {
             // receive new packet
             if (get_packet(sock_fd, &receiver_addr, packet_buffer, &rec_len, &addr_len)) return E_INT;
             // copy to second buffer for processing, to preserve the original packet for ack to sender
-            copy_buffers(second_packet_buffer, packet_buffer, rec_len);
+            copy_buffers(packet_buffer, second_packet_buffer, rec_len);
             // convert from dns(dot) format
             convert_from_dns_format(second_packet_buffer);
             // check if the suffix is the same as the base host(for skipping other packets)
@@ -390,6 +378,9 @@ int main(int argc, char *argv[]) {
             // send ack to sender
             if (send_ack_response(packet_buffer, rec_len)) return E_INT;
         }
+        // free malloced memory for filepath
+        free(args.dst_filepath);
+        free(args.complete_dst_filepath);
         // close output file
         fclose(out_ptr);
 

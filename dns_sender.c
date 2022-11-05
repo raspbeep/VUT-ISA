@@ -8,19 +8,7 @@
  * @brief
  */
 
-#include <stdio.h>
-#include <string.h>
-#include "stdbool.h"
-#include <unistd.h>
-#include <stdlib.h>
-
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-
-#include "errors.h"
-#include "common.h"
-#include "dns_sender_events.h"
+#include "dns_sender.h"
 
 struct InputArgs {
     // base domain for all communication
@@ -40,9 +28,11 @@ struct sockaddr_in receiver_addr;
 socklen_t addr_len;
 int sock_fd;
 unsigned long total_len = 0;
+// output file pointer
 FILE *fptr = 0;
-
+// enable timeouts for sending and receiving packets
 int timeout = 1;
+// enable calling interface functions
 int interface = 1;
 
 void print_help() {
@@ -297,7 +287,7 @@ int send_first_info_packet() {
     pos += (int)strlen(args.checked_base_host);
     // zero length octet
     pos += 1;
-
+    // convert from dot format to length octet format
     convert_dns_format(buffer, pos);
 
     construct_dns_question(buffer + pos);
