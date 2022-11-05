@@ -37,8 +37,9 @@ int sock_fd;
 struct sockaddr_in receiver_addr, sender_addr;
 socklen_t addr_len;
 FILE *out_ptr;
-int debug = 0;
+int timeout = 0;
 int interface = 1;
+int debug = 0;
 
 
 void print_help() {
@@ -249,11 +250,13 @@ int init_socket() {
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     receiver_addr.sin_port = htons(DNS_PORT);
-
-    printf("opening UDP socket(...)\n");
+    if (debug) {
+        printf("opening UDP socket(...)\n");
+    }
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) return E_SOCK_CRT;
-
-    printf("binding with the port %d (%d)\n", ntohs(receiver_addr.sin_port), receiver_addr.sin_port);
+    if (debug) {
+        printf("binding with the port %d (%d)\n", ntohs(receiver_addr.sin_port), receiver_addr.sin_port);
+    }
 
     if (bind(sock_fd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) == -1) return E_BIND;
     addr_len = sizeof(sender_addr);
@@ -274,7 +277,6 @@ void copy_buffers(unsigned char *dst, const unsigned char *src, ssize_t rec_len)
 
 void decode_buffer(unsigned char *src, unsigned char *dst) {
     memset(dst, 0, DNS_SIZE);
-    unsigned long length =  strlen((char *)src);
     for (int i = 0, j = 0; i < strlen((char *)src); i += 2, j++) {
         char_base16_decode(src[i], src[i + 1], &(dst[j]));
     }
@@ -292,16 +294,16 @@ int check_base_host_suffix(char *str) {
 
 int main(int argc, char *argv[]) {
     signal(SIGINT, sigint_handler);
-
+    // buffer for incoming data
     unsigned char packet_buffer[DNS_SIZE];
+    // buffer for incoming data after decoding from dns(dot) format
     unsigned char second_packet_buffer[DNS_SIZE];
-
-    // buffer for incoming data, double the size in case only 1 of 2 base16 arrives
-    static unsigned char data_buffer[DNS_SIZE * 2];
+    // buffer for received data
+    static unsigned char data_buffer[DNS_SIZE];
     // only DNS size because decoded data is smaller
     unsigned char decoded_data_buffer[DNS_SIZE];
 
-    memset(data_buffer, 0, DNS_SIZE * 2);
+    memset(data_buffer, 0, DNS_SIZE);
     int data_buffer_position = 0;
 
     int res;
@@ -333,7 +335,7 @@ int main(int argc, char *argv[]) {
         // open the output file in binary mode
         if (open_file(args.complete_dst_filepath, "wb", &out_ptr)) return E_OPEN_FILE;
         // option to disable timeout(for debugging)
-        if (debug) {
+        if (timeout) {
             if (set_timeout(sock_fd)) return E_SET_TIMEOUT;
         }
 
@@ -342,7 +344,7 @@ int main(int argc, char *argv[]) {
             // reset buffers
             memset(packet_buffer, 0, DNS_SIZE);
             memset(second_packet_buffer, 0, DNS_SIZE);
-            memset(data_buffer, 0, DNS_SIZE * 2);
+            memset(data_buffer, 0, DNS_SIZE);
             memset(decoded_data_buffer, 0, DNS_SIZE);
 
             // receive new packet
@@ -391,7 +393,7 @@ int main(int argc, char *argv[]) {
         // close output file
         fclose(out_ptr);
 
-        if (debug) {
+        if (timeout) {
             if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
         }
         if (interface) {

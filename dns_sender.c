@@ -42,7 +42,7 @@ int sock_fd;
 unsigned long total_len = 0;
 FILE *fptr = 0;
 
-int debug = 0;
+int timeout = 1;
 int interface = 1;
 
 void print_help() {
@@ -353,7 +353,7 @@ int send_packets() {
 
     if (init_socket()) return E_INIT_CONN;
 
-    if (debug) {
+    if (timeout) {
         if (set_timeout(sock_fd)) return E_INT;
     }
     if (interface) {
@@ -469,10 +469,9 @@ int main(int argc, char *argv[]) {
     // return 0 if `--help`
     if (result == EXIT_HELP) return EXIT_OK;
     if (result) return result;
-
+    // send data
     send_packets();
-
+    // close
     close(sock_fd);
-
     return EXIT_OK;
 }
