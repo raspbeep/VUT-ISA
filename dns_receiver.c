@@ -37,8 +37,8 @@ int sock_fd;
 struct sockaddr_in receiver_addr, sender_addr;
 socklen_t addr_len;
 FILE *out_ptr;
-int debug = 1;
-int interface = 0;
+int debug = 0;
+int interface = 1;
 
 
 void print_help() {
@@ -280,14 +280,14 @@ void decode_buffer(unsigned char *src, unsigned char *dst) {
     }
 }
 
-int check_base_host_suffix(const char *str) {
+int check_base_host_suffix(char *str) {
     if (!str || !args.checked_base_host)
         return 0;
     size_t data_length = strlen(str);
     size_t suffix_length = strlen(args.checked_base_host);
-    if (suffix_length >  data_length)
-        return 0;
-    return strncmp(str + data_length - suffix_length, args.checked_base_host, suffix_length);
+    char *str1 = str + data_length - suffix_length;
+    int res = strcmp(str1, args.checked_base_host);
+    return res;
 }
 
 int main(int argc, char *argv[]) {
@@ -351,19 +351,21 @@ int main(int argc, char *argv[]) {
             copy_buffers(second_packet_buffer, packet_buffer, rec_len);
             // convert from dns(dot) format
             convert_from_dns_format(second_packet_buffer);
-            printf("%s\n", (char *)(second_packet_buffer+ sizeof(struct DNSHeader)));
-            // TODO: implement in dns_tester
+            // check if the suffix is the same as the base host(for skipping other packets)
             if (check_base_host_suffix((char *)(second_packet_buffer + sizeof(struct DNSHeader)))) {
                 continue;
             }
+            if (interface) {
+                dns_receiver__on_query_parsed(args.complete_dst_filepath,
+                                              (char*)(second_packet_buffer + sizeof(struct DNSHeader) + 1));
+            }
             // gets all data from packet
             get_data_from_packet(second_packet_buffer, data_buffer, rec_len, &data_buffer_position);
-            if (chunk_id == 34) {
-                printf("chunk_id: %d", chunk_id);
-            }
             // comparison to find if the received packet was the last one
             if (*(char *)data_buffer ==  'x') {
                 if (send_ack_response(packet_buffer, rec_len)) return E_INT;
+                // reset data buffer position for next file
+                data_buffer_position = 0;
                 break;
             }
             // decode received base16 encoded data
@@ -379,9 +381,11 @@ int main(int argc, char *argv[]) {
             chunk_id++;
             // sum up the total length of the decoded data
             content_length += (int)strlen((char *)data_buffer) / 2;
+            //write content to file
             fwrite(decoded_data_buffer, 1, strlen((char *)data_buffer) / 2, out_ptr);
+            // reset data buffer position for next packet
             data_buffer_position = 0;
-
+            // send ack to sender
             if (send_ack_response(packet_buffer, rec_len)) return E_INT;
         }
         // close output file

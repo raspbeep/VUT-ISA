@@ -42,8 +42,8 @@ int sock_fd;
 unsigned long total_len = 0;
 FILE *fptr = 0;
 
-int debug = 1;
-int interface = 0;
+int debug = 0;
+int interface = 1;
 
 void print_help() {
     printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
@@ -331,6 +331,7 @@ int send_last_info_packet() {
     pos += (int)strlen(args.checked_base_host);
     // zero length octet
     pos += 1;
+
     convert_dns_format(buffer, pos);
 
     construct_dns_question(buffer + pos);
@@ -377,13 +378,12 @@ int send_packets() {
         memset(packet_buffer, 0, DNS_SIZE);
         // get new chunk id, take care of id overflow
         chunk_id = (int) (chunk_n) % (1 << 16);
-
         // create header and shift `pos`
         construct_dns_header(packet_buffer, chunk_id, 1);
         packet_buffer_pos += sizeof(struct DNSHeader);
         // label capacity left in current label section
         int label_capacity = LABEL_SIZE;
-        //
+        // count of chars in one label section
         int label_count = 0;
         // locks at the last length octet
         int lock = packet_buffer_pos;
@@ -398,6 +398,8 @@ int send_packets() {
             if (label_capacity && !(current_packet_data_capacity == 1 && char_count % 2 == 0)) {
                 // if EOF is found
                 if ((last_char = get_next_encoded_char(&c)) != 0) {
+                    *(packet_buffer + lock) = '.';
+                    packet_buffer_pos++;
                     break;
                 }
                 char_count++;
@@ -416,15 +418,22 @@ int send_packets() {
                 label_capacity = LABEL_SIZE;
             }
         }
-        *(packet_buffer + lock) = '.';
-
+        // copy base host into buffer
         strcpy((char *)(packet_buffer + packet_buffer_pos), args.checked_base_host);
+        // add its length to the buffer position
         packet_buffer_pos += (int)strlen(args.checked_base_host);
 
+        if (interface) {
+            dns_sender__on_chunk_encoded(args.dst_filepath,
+                                         chunk_n,
+                                         // +1 to omit dot at the beginning
+                                         (char *)packet_buffer + sizeof(struct DNSHeader) + 1);
+        }
+        // convert dns(dot) format to dns(length) format
         convert_dns_format(packet_buffer, packet_buffer_pos);
-        // already added null byte
+        // add null byte and move next
         packet_buffer_pos += 1;
-
+        // add question to the end of the buffer (0 1 0 1)
         construct_dns_question(packet_buffer + packet_buffer_pos);
         packet_buffer_pos += sizeof(struct Question);
         // calling interface function
@@ -434,17 +443,14 @@ int send_packets() {
                                       args.dst_filepath, chunk_n, char_count / 2);
         }
 
-        if (chunk_n == 360506) {
-            printf("");
-        }
-        printf("%s\n", (char *)(packet_buffer+ sizeof(struct DNSHeader)));
-
-        if ((res = send_and_wait(sock_fd, &receiver_addr, packet_buffer, packet_buffer_pos, &rec_len,
+        if ((res = send_and_wait(sock_fd, &receiver_addr, packet_buffer,
+                                 packet_buffer_pos, &rec_len,
                                  &addr_len, chunk_id))) {
             return res;
         }
         chunk_n++;
         total_len += char_count / 2;
+        // break after the last char, all data were sent
         if (last_char) {
             break;
         }
