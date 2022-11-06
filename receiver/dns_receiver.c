@@ -10,7 +10,7 @@
 
 #include "dns_receiver.h"
 // timeout for receiver
-#define REC_TO_S 10
+#define REC_TO_S 20
 
 // enable timeouts for sending and receiving packets
 int timeout = 1;
@@ -76,7 +76,7 @@ int check_base_host() {
     // check label length
     // +1 to check until the `\0` at the end
     unsigned char c;
-    for (int i = 0; i < strlen(args.checked_base_host) + 1; i++) {
+    for (int i = 0; i < (int)(strlen(args.checked_base_host) + 1); i++) {
         c = *(args.checked_base_host + i);
         if (c == '.' || c == '\0') {
             if (!count) continue;
@@ -144,7 +144,7 @@ int parse_args(int argc, char *argv[]) {
     memset(&args, 0, sizeof(struct InputArgs));
     int positional_arg_counter = 0;
 
-    for (size_t i = 1; i < argc; ++i) {
+    for (size_t i = 1; (int)i < argc; ++i) {
         if (!strcmp(argv[i], "--help")) {
             if (i != 1) return handle_error(E_INV_ARGS);
             print_help();
@@ -228,7 +228,7 @@ int get_info_from_first_packet(const unsigned char *packet_buffer) {
     pos++;
     int lock = pos;
     int count = 0;
-    while (pos < lock + strlen((char *)packet_buffer + lock) - strlen(args.checked_base_host)) {
+    while (pos < (int)(lock + strlen((char *)packet_buffer + lock) - strlen(args.checked_base_host))) {
         for (int i = 0; i < c; i++) {
             buffer[count] = *(packet_buffer + pos + i);
             count++;
@@ -289,7 +289,7 @@ void copy_buffers(const unsigned char *src, unsigned char *dst, ssize_t rec_len)
 
 void decode_buffer(unsigned char *src, unsigned char *dst) {
     memset(dst, 0, DNS_SIZE);
-    for (int i = 0, j = 0; i < strlen((char *)src); i += 2, j++) {
+    for (int i = 0, j = 0; i < (int)strlen((char *)src); i += 2, j++) {
         char_base16_decode(src[i], src[i + 1], &(dst[j]));
     }
 }
@@ -361,6 +361,9 @@ int main(int argc, char *argv[]) {
 
             // receive new packet
             if ((receive_packet_fail = get_packet(sock_fd, &receiver_addr, packet_buffer, &rec_len, &addr_len))) break;
+            if (get_packet_id(packet_buffer) != (int)(chunk_id) % (1 << 16)) {
+                continue;
+            }
             // copy to second buffer for processing, to preserve the original packet for ack to sender
             copy_buffers(packet_buffer, second_packet_buffer, rec_len);
             // convert from dns(dot) format
@@ -405,17 +408,19 @@ int main(int argc, char *argv[]) {
             // send ack to sender
             if (send_ack_response(packet_buffer, rec_len)) return E_INT;
         }
-        if (receive_packet_fail) {
-            printf("Skipping file, timeout reached.\n");
-            free(args.dst_filepath);
-            free(args.complete_dst_filepath);
-            fclose(out_ptr);
-            continue;
-        }
         // close output file
         fclose(out_ptr);
         if (timeout) {
             if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
+        }
+        if (receive_packet_fail) {
+            if (debug) {
+                fprintf(stdout, "Skipping file, timeout reached.\n");
+            }
+            free(args.dst_filepath);
+            free(args.complete_dst_filepath);
+            fclose(out_ptr);
+            continue;
         }
         if (interface) {
             // calling an interface function

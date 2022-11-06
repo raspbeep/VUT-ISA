@@ -12,6 +12,7 @@
 
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <netinet/in.h>
 
 // default DNS port
 #define DNS_PORT 53
@@ -167,6 +168,28 @@ int send_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, int p
  *   returns: EXIT_OK(0) on success, E_TIMEOUT or E_PKT_REC on error
  */
 int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_t *rec_len, socklen_t *addr_len);
+
+/*
+ * Function: get_packet_rc
+ * ----------------------------
+ *   Gets result code from packet header.
+ *
+ *   buffer: buffer with DNS packet
+ *
+ *   returns: result code in packet
+ */
+unsigned char get_packet_rc(unsigned char *buffer);
+
+/*
+ * Function: get_packet_a_count
+ * ----------------------------
+ *   Gets sum all all answer fields from packet header.
+ *
+ *   buffer: buffer with DNS packet
+ *
+ *   returns: answers in packet
+ */
+unsigned char get_packet_a_count(unsigned char *buffer);
 
 /*
  * Function: get_packet_id

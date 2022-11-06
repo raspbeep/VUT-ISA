@@ -14,7 +14,6 @@
 
 #define BUFFER 1024
 #define RECEIVER_IP "0.0.0.0"
-#define RECEIVER_PORT 53
 #define BUFFER 1024
 
 // communication tester <-> receiver
@@ -39,7 +38,7 @@ int init_connection_to_receiver() {
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_addr.s_addr = inet_addr(RECEIVER_IP);
-    receiver_addr.sin_port = htons(RECEIVER_PORT);
+    receiver_addr.sin_port = htons(DNS_PORT);
 
     // create datagram socket
     if ((sock_fd_to_receiver = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -48,7 +47,7 @@ int init_connection_to_receiver() {
     fprintf(stdout, "[LOG] Socket for communication with receiver created\n");
 
     if (connect(sock_fd_to_receiver, (struct sockaddr *)&receiver_addr, addr_len)  == -1) {
-        err(1, "[ERR] connect() failed");
+        fprintf(stdout, "[ERR] connect() failed");
     }
     return 0;
 }
@@ -62,7 +61,7 @@ int init_connection_to_sender() {
         tester_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         tester_addr.sin_port = htons(TESTER_PORT);
 
-        printf("[LOG] Opening UDP socket for communication sender <-> tester\n");
+        fprintf(stdout, "[LOG] Opening UDP socket for communication sender <-> tester\n");
         if ((sock_fd_to_sender = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
             return -1;
         }
@@ -97,7 +96,7 @@ void change_packet_id() {
 }
 
 
-int main(int argc, char *argv[]) {
+int main() {
     // create seed for random packet drop generator
     srand(time(NULL));
 
@@ -129,7 +128,7 @@ int main(int argc, char *argv[]) {
             // receive ACK message from receiver
             if ((received_len = recvfrom(sock_fd_to_receiver, buffer, BUFFER, 0, (struct sockaddr *) &receiver_addr,
                                          &addr_len)) >= 0) {
-                // send message to receiver
+                // send message to sender
                 sent_len = sendto(sock_fd_to_sender, buffer, received_len, 0, (struct sockaddr *) &sender_addr,
                                   addr_len);
                 if (sent_len == -1) {
@@ -138,7 +137,7 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "[ERR] send(): buffer written partially");
                 }
             }
-            printf("Successfully sent packet to receiver and confirmed to sender\n");
+            fprintf(stdout, "[LOG] Successfully sent packet to receiver and confirmed to sender\n");
         } else {
             // change something or drop
 
@@ -157,19 +156,6 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "[ERR] send() failed");
             } else if (sent_len != received_len) {
                 fprintf(stderr, "[ERR] send(): buffer written partially");
-            }
-
-            // receive ACK message from receiver
-            if ((received_len = recvfrom(sock_fd_to_receiver, buffer, BUFFER, 0, (struct sockaddr *) &receiver_addr,
-                                         &addr_len)) >= 0) {
-                // send message to receiver
-                sent_len = sendto(sock_fd_to_sender, buffer, received_len, 0, (struct sockaddr *) &sender_addr,
-                                  addr_len);
-                if (sent_len == -1) {
-                    fprintf(stderr, "[ERR] send() failed");
-                } else if (sent_len != received_len) {
-                    fprintf(stderr, "[ERR] send(): buffer written partially");
-                }
             }
         }
     }

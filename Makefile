@@ -6,25 +6,25 @@ TARGETS = Makefile Readme.md manual.pdf *.c *.h
 all: clean common sender receiver tester
 
 sender: sender_events
-	gcc sender/dns_sender.c -o sender/dns_sender.o -c
-	gcc -o dns_sender  common/common.o sender/dns_sender.o sender/dns_sender_events.o
+	gcc sender/dns_sender.c -o sender/dns_sender.o -c $(CPPFLAGS)
+	gcc -o dns_sender  common/common.o sender/dns_sender.o sender/dns_sender_events.o $(CPPFLAGS)
 
 receiver: receiver_events
-	gcc receiver/dns_receiver.c -o receiver/dns_receiver.o -c -g
-	gcc -o dns_receiver common/common.o receiver/dns_receiver.o receiver/dns_receiver_events.o
+	gcc receiver/dns_receiver.c -o receiver/dns_receiver.o -c -g $(CPPFLAGS)
+	gcc -o dns_receiver common/common.o receiver/dns_receiver.o receiver/dns_receiver_events.o $(CPPFLAGS)
 
 common:
-	gcc common/common.c -o common/common.o -c
+	gcc common/common.c -o common/common.o -c $(CPPFLAGS)
 
-tester:
-	gcc tester/dns_tester.c -o tester/dns_tester.o -c -g
-	gcc -o dns_tester tester/dns_tester.o
+tester: common
+	gcc tester/dns_tester.c -o tester/dns_tester.o -c -g $(CPPFLAGS)
+	gcc -o dns_tester tester/dns_tester.o common/common.o $(CPPFLAGS)
 
 sender_events:
-	gcc sender/dns_sender_events.c -o sender/dns_sender_events.o -c
+	gcc sender/dns_sender_events.c -o sender/dns_sender_events.o -c $(CPPFLAGS)
 
 receiver_events:
-	gcc receiver/dns_receiver_events.c -o receiver/dns_receiver_events.o -c
+	gcc receiver/dns_receiver_events.c -o receiver/dns_receiver_events.o -c $(CPPFLAGS)
 
 pack: clean
 	tar -cvzf xkrato61.tar common/* receiver/* sender/* tester/* README Makefile manual.pdf

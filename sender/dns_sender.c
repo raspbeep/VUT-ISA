@@ -11,9 +11,9 @@
 #include "dns_sender.h"
 // CHANGE FOR TESTING TO TESTER_PORT
 // FOR NORMAL USAGE KEEP DNS_PORT
-#define RECEIVER_PORT DNS_PORT
+#define RECEIVER_PORT TESTER_PORT
 // timeout for sender
-#define SND_TO_S 3
+#define SND_TO_S 4
 
 // output file pointer
 FILE *fptr = 0;
@@ -86,7 +86,7 @@ int check_base_host() {
     // check label length
     // +1 to check until the `\0` at the end
     unsigned char c;
-    for (int i = 0; i < strlen(args.checked_base_host)+1; i++) {
+    for (int i = 0; i < (int)(strlen(args.checked_base_host) + 1); i++) {
         c = *(args.checked_base_host + i);
         if (c == '.' || c == '\0') {
             if (!count) continue;
@@ -159,7 +159,7 @@ int parse_args(int argc, char *argv[]) {
     memset(&args, 0, sizeof(struct InputArgs));
 
     int positional_arg_counter = 0;
-    for (size_t i = 1; i < argc; ++i) {
+    for (size_t i = 1; (int)i < argc; ++i) {
         if (!strcmp(argv[i], "--help")) {
             if (argc != 2) return handle_error(E_INV_ARGS);
             print_help();

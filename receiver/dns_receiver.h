@@ -16,6 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <signal.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>

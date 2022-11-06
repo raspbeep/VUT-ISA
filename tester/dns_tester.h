@@ -64,8 +64,3 @@ int change_generator();
  *   Changes the packet ID of the DNS packet.
  */
 void change_packet_id();
-
-
-
-
-

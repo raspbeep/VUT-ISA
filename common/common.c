@@ -80,11 +80,6 @@ int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_
     return EXIT_OK;
 }
 
-unsigned int get_packet_id(unsigned char *buffer) {
-    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
-    return (unsigned)ntohs(dns_header->id);
-}
-
 unsigned char get_packet_rc(unsigned char *buffer) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
     return dns_header->r_code;
@@ -93,8 +88,13 @@ unsigned char get_packet_rc(unsigned char *buffer) {
 unsigned char get_packet_a_count(unsigned char *buffer) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
     return (unsigned)ntohs(dns_header->ans_count) +
-            (unsigned)ntohs(dns_header->ar_count) +
-            (unsigned)ntohs(dns_header->ns_count);
+           (unsigned)ntohs(dns_header->ar_count) +
+           (unsigned)ntohs(dns_header->ns_count);
+}
+
+unsigned int get_packet_id(unsigned char *buffer) {
+    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
+    return (unsigned)ntohs(dns_header->id);
 }
 
 int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
@@ -117,7 +117,7 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
             continue;
         }
         // check received packet id
-        if (get_packet_id(buffer) != id) {
+        if (get_packet_id(buffer) != (unsigned)id) {
             inv_response = 1;
             retries--;
             continue;
@@ -174,7 +174,6 @@ void char_base16_decode(unsigned char a, unsigned char b, unsigned char *c) {
     *c = (char)((((a) - 'a') * 16 ) + b - 'a');
 }
 
-// assigns base16 encoded src to dst
 void char_base16_encode(char c, char *a, char *b) {
     // split one char into two
     *a = (char)(((unsigned char)(c) >> 4) + 'a');
@@ -241,6 +240,7 @@ int handle_error(const int err_n) {
             return E_NM_SRV;
         case E_IP_VER:
             fprintf(stderr, "Err: Invalid IP address.\n");
+            return E_IP_VER;
         default:
             fprintf(stderr, "Err: Unknown error occurred.\n");
             return 400;
