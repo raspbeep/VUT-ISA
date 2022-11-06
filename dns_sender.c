@@ -209,13 +209,8 @@ int read_char_from_src(int *c) {
         return EXIT_OK;
     }
 
-    ssize_t res;
-    if ((res = read(0, &c, 1)) < 0) {
-        // error reading file
-        return handle_error(E_RD_FILE);
-    }
-    // eof was read
-    if (res == 0) {
+    *c = fgetc(stdin);
+    if (*c == EOF) {
         return 1;
     }
     // either valid char or EOF was read
