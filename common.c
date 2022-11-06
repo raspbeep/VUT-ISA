@@ -5,7 +5,7 @@
  *
  * @file common.c
  *
- * @brief
+ * @brief Common functions for dns_sender, dns_receiver and dns_tester
  */
 #include <sys/socket.h>
 

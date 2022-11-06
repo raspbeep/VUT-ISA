@@ -5,7 +5,7 @@
  *
  * @file dns_receiver.c
  *
- * @brief
+ * @brief Server side of DNS tunneling application
  */
 
 #include "dns_receiver.h"

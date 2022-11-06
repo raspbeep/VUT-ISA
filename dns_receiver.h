@@ -5,7 +5,7 @@
  *
  * @file dns_receiver.h
  *
- * @brief
+ * @brief Header for the server side of DNS tunneling application
  */
 
 #pragma once

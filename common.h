@@ -5,7 +5,7 @@
  *
  * @file common.h
  *
- * @brief
+ * @brief Header for common functions for dns_sender, dns_receiver and dns_tester
  */
 
 #pragma once

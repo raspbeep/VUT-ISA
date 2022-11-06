@@ -7,7 +7,7 @@
  *
  * @file dns_tester.c
  *
- * @brief
+ * @brief Client side of DNS tunneling application
  */
 
 #pragma once
