@@ -9,8 +9,9 @@
  */
 
 #include "dns_sender.h"
-
+// CHANGE FOR TESTING TO DNS_TESTER
 #define RECEIVER_PORT DNS_PORT
+// timeout for sender
 #define SND_TO_S 3
 
 struct InputArgs {

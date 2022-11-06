@@ -9,4 +9,4 @@ add_executable( dns_sender sender/dns_sender.c sender/dns_sender.h
 add_executable( dns_receiver receiver/dns_receiver.h receiver/dns_receiver.c
         common/common.c receiver/dns_receiver_events.h receiver/dns_receiver_events.c)
 
-add_executable(dns_tester tester/tester.c tester/tester.h)
+add_executable(dns_tester tester/dns_tester.c tester/dns_tester.h)

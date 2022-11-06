@@ -10,20 +10,7 @@
  * @brief Testing of DNS tunneling application
  */
 
-#pragma once
-
-#include <err.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include<arpa/inet.h>
-#include<netdb.h>
-#include <sys/time.h>
-
-#include "tester.h"
+#include "dns_tester.h"
 
 #define BUFFER 1024
 #define RECEIVER_IP "0.0.0.0"

@@ -9,6 +9,7 @@
  */
 
 #include "dns_receiver.h"
+// timeout for receiver
 #define REC_TO_S 10
 
 struct InputArgs {
@@ -29,9 +30,8 @@ FILE *out_ptr;
 int timeout = 1;
 // enable calling interface functions
 int interface = 1;
-// enable some debug messages
-int debug = 1;
-
+// enable debug messages
+int debug = 0;
 
 void print_help() {
     printf( "Usage: ./dns_receiver BASE_HOST DST_FILEPATH\n"
