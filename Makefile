@@ -3,9 +3,7 @@ TARGETS = Makefile Readme.md manual.pdf *.c *.h
 
 .PHONY: all sender receiver common tester sender_events receiver_events clean pack
 
-
-all: clean common sender receiver
-
+all: clean common sender receiver tester
 
 sender: sender_events
 	gcc sender/dns_sender.c -o sender/dns_sender.o -c
@@ -28,12 +26,9 @@ sender_events:
 receiver_events:
 	gcc receiver/dns_receiver_events.c -o receiver/dns_receiver_events.o -c
 
-pack:
-	tar -cvzf # TODO
-
-
+pack: clean
+	tar -cvzf xkrato61.tar common/* receiver/* sender/* tester/* README Makefile manual.pdf
 
 clean:
 	rm -f sender/*.o receiver/*.o common/*.o tester/*.o
-	rm -f dns_sender
-	rm -f dns_receiver
+	rm -f dns_sender dns_receiver dns_tester
