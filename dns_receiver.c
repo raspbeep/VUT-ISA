@@ -45,8 +45,15 @@ int check_base_host() {
     int size = (int)strlen(args.base_host), dot = 0;
     // one more byte for the dot
     if (*(args.base_host) != '.') {
+        if (!(*(args.base_host) >= 97 && *(args.base_host) <= 122)) {
+            return handle_error(E_HOST_INV_CHAR);
+        }
         size += 1;
         dot = 1;
+    } else {
+        if (!(*(args.base_host + 1) >= 97 && *(args.base_host + 1) <= 122)) {
+            return handle_error(E_HOST_INV_CHAR);
+        }
     }
     // +1 for null byte at the end
     args.checked_base_host = malloc(sizeof(char) * (size + 1));
@@ -301,11 +308,11 @@ int main(int argc, char *argv[]) {
     int data_buffer_position = 0;
 
     int res;
-    if ((res = parse_args(argc, argv) > EXIT_OK)) {
+    if ((res = parse_args(argc, argv)) > EXIT_OK) {
         if (res == EXIT_HELP) {
             return EXIT_OK;
         }
-        return E_INV_ARGS;
+        return res;
     }
     if (init_socket()) return E_INIT_CONN;
 

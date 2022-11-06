@@ -213,6 +213,9 @@ int handle_error(const int err_n) {
         case E_HOST_LEN:
             fprintf(stderr, "Err: Invalid base host length(must bet <=63).\n");
             return E_HOST_LEN;
+        case E_HOST_INV_CHAR:
+            fprintf(stderr, "Err: Invalid base host.\n");
+            return E_HOST_INV_CHAR;
         case E_PKT_SEND:
             fprintf(stderr, "Err: Error sending packet.\n");
             return E_PKT_SEND;
