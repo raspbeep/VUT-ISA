@@ -20,8 +20,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#include "errors.h"
-#include "common.h"
+#include "../common/common.h"
 #include "dns_sender_events.h"
 #include <string.h>
 

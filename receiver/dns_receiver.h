@@ -20,8 +20,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include "common.h"
-#include "errors.h"
+#include "../common/common.h"
 #include "dns_receiver_events.h"
 
 /*

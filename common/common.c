@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "errors.h"
 #include "common.h"
 
 void construct_dns_question(unsigned char *buffer) {
