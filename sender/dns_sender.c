@@ -9,10 +9,18 @@
  */
 
 #include "dns_sender.h"
-// CHANGE FOR TESTING TO DNS_TESTER
+// CHANGE FOR TESTING TO TESTER_PORT
+// FOR NORMAL USAGE KEEP DNS_PORT
 #define RECEIVER_PORT DNS_PORT
 // timeout for sender
 #define SND_TO_S 3
+
+// output file pointer
+FILE *fptr = 0;
+// enable timeouts for sending and receiving packets
+int timeout = 1;
+// enable calling interface functions
+int interface = 1;
 
 struct InputArgs {
     // base domain for all communication
@@ -32,12 +40,6 @@ struct sockaddr_in receiver_addr;
 socklen_t addr_len;
 int sock_fd;
 unsigned long total_len = 0;
-// output file pointer
-FILE *fptr = 0;
-// enable timeouts for sending and receiving packets
-int timeout = 1;
-// enable calling interface functions
-int interface = 1;
 
 void print_help() {
     printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
@@ -141,7 +143,7 @@ int scan_resolv_conf() {
         }
     }
     if (!number_of_ips) {
-        return handle_error(E_NM_SRV);
+        return E_NM_SRV;
     }
     fclose(fd);
     return 0;
@@ -357,7 +359,10 @@ int send_packets() {
         dns_sender__on_transfer_init((struct in_addr *) &receiver_addr.sin_addr);
     }
     // send packet with destination file name
-    send_first_info_packet();
+    int res;
+    if ((res = send_first_info_packet()) != 0) {
+        return res;
+    }
     // char currently inserted into buffer
     char c;
     // stops on break from inside
@@ -367,7 +372,6 @@ int send_packets() {
     int current_packet_data_capacity;
     // sends all packets
     while (1) {
-        int res;
         // set maximum length for each packet
         current_packet_data_capacity = packet_data_capacity;
         // position in the buffer
@@ -468,7 +472,9 @@ int main(int argc, char *argv[]) {
     if (result == EXIT_HELP) return EXIT_OK;
     if (result) return result;
     // send data
-    send_packets();
+    if ((result = send_packets())) {
+        return result;
+    }
     // close
     close(sock_fd);
     return EXIT_OK;

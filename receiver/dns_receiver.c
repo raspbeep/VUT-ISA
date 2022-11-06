@@ -12,6 +12,13 @@
 // timeout for receiver
 #define REC_TO_S 10
 
+// enable timeouts for sending and receiving packets
+int timeout = 1;
+// enable calling interface functions
+int interface = 1;
+// enable debug messages
+int debug = 0;
+
 struct InputArgs {
     // base domain for all communications
     char *base_host;
@@ -26,12 +33,6 @@ int sock_fd;
 struct sockaddr_in receiver_addr, sender_addr;
 socklen_t addr_len;
 FILE *out_ptr;
-// enable timeouts for sending and receiving packets
-int timeout = 1;
-// enable calling interface functions
-int interface = 1;
-// enable debug messages
-int debug = 0;
 
 void print_help() {
     printf( "Usage: ./dns_receiver BASE_HOST DST_FILEPATH\n"
@@ -111,13 +112,22 @@ int check_dst_filepath() {
     }
     args.dst_filepath = ptr;
 
-    // need this check for stat
-    if (access(args.dst_filepath, W_OK)) return E_INT;
-
-    // check if it is a folder
     struct stat stat_res;
-    if (stat(args.dst_filepath, &stat_res) != 0)
-        return 0;
+    // need this check for stat
+    if (access(args.dst_filepath, W_OK)) {
+        if (stat(args.dst_filepath, &stat_res) != 0) {
+            mkdir(args.dst_filepath, 0700);
+            if (access(args.dst_filepath, W_OK)) {
+                return handle_error(E_NOT_DIR);
+            } else {
+                return EXIT_OK;
+            }
+        }
+    };
+
+    if (stat(args.dst_filepath, &stat_res) == 0) {
+        return EXIT_OK;
+    }
     if (!S_ISDIR(stat_res.st_mode)) {
         return handle_error(E_NOT_DIR);
     }
@@ -172,7 +182,7 @@ int send_ack_response(unsigned char *buffer, ssize_t rec_len) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
     dns_header->qr = ANSWER;
     // response `domain not found` signals ack for given chunk
-    dns_header->r_code = NXDOMAIN;
+    dns_header->r_code = DNS_BAD_FORMAT_ACK;
 
     if (send_packet(sock_fd, &sender_addr, buffer, (int)rec_len)) return E_PKT_SEND;
     return EXIT_OK;

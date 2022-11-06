@@ -45,10 +45,10 @@ int init_connection_to_receiver() {
     if ((sock_fd_to_receiver = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         return -1;
     }
-    printf("* Socket for communication with receiver created *\n");
+    fprintf(stdout, "[LOG] Socket for communication with receiver created\n");
 
     if (connect(sock_fd_to_receiver, (struct sockaddr *)&receiver_addr, addr_len)  == -1) {
-        err(1, "connect() failed");
+        err(1, "[ERR] connect() failed");
     }
     return 0;
 }
@@ -62,11 +62,11 @@ int init_connection_to_sender() {
         tester_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         tester_addr.sin_port = htons(TESTER_PORT);
 
-        printf("opening UDP socket for communication sender <-> tester\n");
+        printf("[LOG] Opening UDP socket for communication sender <-> tester\n");
         if ((sock_fd_to_sender = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
             return -1;
         }
-        printf("binding with the port %d (%d)\n", ntohs(tester_addr.sin_port), tester_addr.sin_port);
+        printf("[LOG] Binding with the port %d (%d)\n", ntohs(tester_addr.sin_port), tester_addr.sin_port);
         if (bind(sock_fd_to_sender, (struct sockaddr *)&tester_addr, sizeof(tester_addr)) == -1) {
             return -1;
         }
@@ -75,7 +75,7 @@ int init_connection_to_sender() {
 
 int drop_generator_bin() {
     static int streak = 0;
-    if (streak == 1) {
+    if (streak == 2) {
         streak = 0;
         return 0;
     }
@@ -104,26 +104,26 @@ int main(int argc, char *argv[]) {
     memset(buffer, 0, BUFFER);
 
     if (init_connection_to_receiver() == -1) {
-        printf("error while creating socket for communication tester <-> receiver\n");
+        fprintf(stdout, "[ERR] Error while creating socket for communication tester <-> receiver\n");
         return -1;
     }
     if (init_connection_to_sender() == -1) {
-        printf("error while creating socket for communication sender <-> tester\n");
+        fprintf(stdout, "[ERR] Error while creating socket for communication sender <-> tester\n");
         return -1;
     }
 
     // receive message from sender
     while ((received_len = recvfrom(sock_fd_to_sender, buffer, BUFFER, 0, (struct sockaddr *)&sender_addr, &addr_len)) >= 0) {
-        printf("data received from %s, port %d\n", inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port));
+        fprintf(stdout, "[LOG] Data received from %s, port %d\n", inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port));
 
         // don't do anything with the packet
         if (!drop_generator_bin()) {
             // send message to receiver
             sent_len = send(sock_fd_to_receiver, buffer, received_len, 0);
             if (sent_len == -1) {
-                err(1, "send() failed");
+                fprintf(stderr, "[ERR] send() failed");
             } else if (sent_len != received_len) {
-                err(1, "send(): buffer written partially");
+                fprintf(stderr, "[ERR] send(): buffer written partially");
             }
 
             // receive ACK message from receiver
@@ -133,9 +133,9 @@ int main(int argc, char *argv[]) {
                 sent_len = sendto(sock_fd_to_sender, buffer, received_len, 0, (struct sockaddr *) &sender_addr,
                                   addr_len);
                 if (sent_len == -1) {
-                    err(1, "send() failed");
+                    fprintf(stderr, "[ERR] send() failed");
                 } else if (sent_len != received_len) {
-                    err(1, "send(): buffer written partially");
+                    fprintf(stderr, "[ERR] send(): buffer written partially");
                 }
             }
             printf("Successfully sent packet to receiver and confirmed to sender\n");
@@ -147,16 +147,16 @@ int main(int argc, char *argv[]) {
             if (change == 0) {
                 continue;
             } else if (change == 1) {
-                printf("Changing packet id\n");
+                fprintf(stdout, "[CHANGE] Changing packet id\n");
                 change_packet_id();
             }
 
             // send message to receiver
             sent_len = send(sock_fd_to_receiver, buffer, received_len, 0);
             if (sent_len == -1) {
-                err(1, "send() failed");
+                fprintf(stderr, "[ERR] send() failed");
             } else if (sent_len != received_len) {
-                err(1, "send(): buffer written partially");
+                fprintf(stderr, "[ERR] send(): buffer written partially");
             }
 
             // receive ACK message from receiver
@@ -166,9 +166,9 @@ int main(int argc, char *argv[]) {
                 sent_len = sendto(sock_fd_to_sender, buffer, received_len, 0, (struct sockaddr *) &sender_addr,
                                   addr_len);
                 if (sent_len == -1) {
-                    err(1, "send() failed");
+                    fprintf(stderr, "[ERR] send() failed");
                 } else if (sent_len != received_len) {
-                    err(1, "send(): buffer written partially");
+                    fprintf(stderr, "[ERR] send(): buffer written partially");
                 }
             }
         }

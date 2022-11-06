@@ -28,10 +28,10 @@
 // DNS kind of query codes
 #define QUERY 0
 #define ANSWER 1
-// DNS code for response(`No such name` error)
-#define NXDOMAIN 3
+// DNS code for function not implemented
+#define DNS_BAD_FORMAT_ACK 4
 
-// error numbers definitions
+// ERROR NUMBERS DEFINITIONS
 #define EXIT_OK 0
 // internal error
 #define E_INT 1

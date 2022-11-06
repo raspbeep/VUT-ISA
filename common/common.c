@@ -122,7 +122,7 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
             retries--;
             continue;
         }
-        if (get_packet_rc(buffer) != NXDOMAIN) {
+        if (get_packet_rc(buffer) != DNS_BAD_FORMAT_ACK) {
             inv_response = 1;
             retries--;
             continue;
@@ -237,7 +237,7 @@ int handle_error(const int err_n) {
             fprintf(stderr, "Err: Setting timeout on socket failed.\n");
             return E_SET_TIMEOUT;
         case E_NM_SRV:
-            fprintf(stderr, "Err: Unable to get implicit namerserver from /etc/resolf.conf.\n");
+            fprintf(stderr, "Err: Unable to find implicit namerserver from /etc/resolf.conf.\n");
             return E_NM_SRV;
         case E_IP_VER:
             fprintf(stderr, "Err: Invalid IP address.\n");
