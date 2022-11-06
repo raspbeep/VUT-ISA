@@ -25,7 +25,7 @@
 #include "dns_receiver_events.h"
 
 /*
- * Function: print_help
+ * Function: print_help.
  * --------------------
  *   Prints help message
  */
@@ -34,7 +34,7 @@ void print_help();
 /*
  * Function: check_base_host
  * ----------------------------
- *   Checks whether the base host is a valid FQDN(< 252 chars, no spaces, no special chars)
+ *   Checks whether the base host is a valid FQDN(and < 252 chars, no spaces, no special chars).
  *
  *   returns: EXIT_OK(0) on success, E_HOST_LEN or E_HOST_INV_CHAR on error
  */

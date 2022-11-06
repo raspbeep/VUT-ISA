@@ -52,3 +52,5 @@
 #define E_SET_TIMEOUT 19
 // error scanning /etc/resolv.conf
 #define E_NM_SRV 20
+// error determining IP address
+#define E_IP_VER 21

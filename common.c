@@ -23,9 +23,10 @@ void construct_dns_question(unsigned char *buffer) {
     q_info->q_class = htons(1); // internet
 }
 
-void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_questions) {
+void construct_dns_header(unsigned char *buffer, unsigned int id) {
     // set pointer of dns header to the beginning of buffer
     struct DNSHeader *header = (struct DNSHeader *)buffer;
+
     // 16b aligned fields
     header->id = (unsigned short) htons(id);
 
@@ -40,7 +41,7 @@ void construct_dns_header(unsigned char *buffer, unsigned int id, uint16_t n_que
     header->cd = 0;                             // checking disabled
     header->r_code = 0;                         // no error
 
-    header->q_count = htons(n_questions);       // 1 question
+    header->q_count = htons(1);                        // 1 question
     header->ans_count = 0;                      // 0 answers
     header->ns_count = 0;                       // 0 nameserver RRs
     header->ar_count = 0;                       // 0 additional RRs
@@ -156,60 +157,62 @@ void char_base16_encode(char c, char *a, char *b) {
 int handle_error(const int err_n) {
     switch (err_n) {
         case E_INT:
-            fprintf(stderr, "Err: Internal error\n");
+            fprintf(stderr, "Err: Internal error.\n");
             return E_INT;
         case EXIT_HELP:
             return EXIT_OK;
         case E_NUM_ARGS:
-            fprintf(stderr, "Err: Invalid number of arguments\n");
+            fprintf(stderr, "Err: Invalid number of arguments.\n");
             return E_NUM_ARGS;
         case E_INV_ARGS:
-            fprintf(stderr, "Err: Invalid arguments\n");
+            fprintf(stderr, "Err: Invalid arguments.\n");
             return E_INV_ARGS;
         case E_RE_U_ARGS:
-            fprintf(stderr, "Err: Redefinition of -u flag\n");
+            fprintf(stderr, "Err: Redefinition of -u flag.\n");
             return E_RE_U_ARGS;
         case E_POS_ARG:
-            fprintf(stderr, "Err: Invalid number of positional arguments\n");
+            fprintf(stderr, "Err: Invalid number of positional arguments.\n");
             return E_POS_ARG;
         case E_NOT_DIR:
-            fprintf(stderr, "Err: DST_FILEPATH is not a directory\n");
+            fprintf(stderr, "Err: DST_FILEPATH is not a directory.\n");
             return E_NOT_DIR;
         case E_OPEN_FILE:
-            fprintf(stderr, "Err: Unable to open file\n");
+            fprintf(stderr, "Err: Unable to open file.\n");
             return E_OPEN_FILE;
         case E_RD_FILE:
-            fprintf(stderr, "Err: Unable to read file\n");
+            fprintf(stderr, "Err: Unable to read file.\n");
             return E_RD_FILE;
         case E_HOST_LEN:
-            fprintf(stderr, "Err: Invalid base host length(must bet <=63)\n");
+            fprintf(stderr, "Err: Invalid base host length(must bet <=63).\n");
             return E_HOST_LEN;
         case E_PKT_SEND:
-            fprintf(stderr, "Err: Error sending packet\n");
+            fprintf(stderr, "Err: Error sending packet.\n");
             return E_PKT_SEND;
         case E_PKT_REC:
-            fprintf(stderr, "Err: Error receiving packet\n");
+            fprintf(stderr, "Err: Error receiving packet.\n");
             return E_PKT_REC;
         case E_INIT_CONN:
-            fprintf(stderr, "Err: Error initializing connection\n");
+            fprintf(stderr, "Err: Error initializing connection.\n");
             return E_INIT_CONN;
         case E_SOCK_CRT:
-            fprintf(stderr, "Err: Failed to create socket\n");
+            fprintf(stderr, "Err: Failed to create socket.\n");
             return E_SOCK_CRT;
         case E_BIND:
-            fprintf(stderr, "Err: Error binding to socket\n");
+            fprintf(stderr, "Err: Error binding to socket.\n");
             return E_BIND;
         case E_TIMEOUT:
-            fprintf(stderr, "Err: Timeout reached\n");
+            fprintf(stderr, "Err: Timeout reached.\n");
             return E_TIMEOUT;
         case E_SET_TIMEOUT:
-            fprintf(stderr, "Err: Setting timeout on socket failed\n");
+            fprintf(stderr, "Err: Setting timeout on socket failed.\n");
             return E_SET_TIMEOUT;
         case E_NM_SRV:
-            fprintf(stderr, "Err: Unable to get implicit namerserver from /etc/resolf.conf\n");
+            fprintf(stderr, "Err: Unable to get implicit namerserver from /etc/resolf.conf.\n");
             return E_NM_SRV;
+        case E_IP_VER:
+            fprintf(stderr, "Err: Invalid IP address.\n");
         default:
-            fprintf(stderr, "Err: Unknown error occurred\n");
+            fprintf(stderr, "Err: Unknown error occurred.\n");
             return 69;
     }
 }

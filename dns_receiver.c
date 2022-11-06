@@ -205,9 +205,12 @@ int get_info_from_first_packet(const unsigned char *packet_buffer) {
 
     int pos = sizeof(struct DNSHeader);
     int c = *(packet_buffer + pos);
+
+    // increment to skip the first length octet
     pos++;
+    int lock = pos;
     int count = 0;
-    while (c != '\0') {
+    while (pos < lock + strlen((char *)packet_buffer + lock) - strlen(args.checked_base_host)) {
         for (int i = 0; i < c; i++) {
             buffer[count] = *(packet_buffer + pos + i);
             count++;
@@ -218,9 +221,9 @@ int get_info_from_first_packet(const unsigned char *packet_buffer) {
         c = *(packet_buffer + pos);
         pos++;
     }
-
-    buffer[strlen((char *)buffer) - strlen(args.checked_base_host) - 1] = '\0';
-
+    // remove last dot
+    buffer[count - 1] = '\0';
+    // allocate space for a complete filepath(folder/name_and_ext)
     args.complete_dst_filepath = malloc(sizeof(char) * ((strlen((char *)buffer) + strlen(args.dst_filepath))));
 
     if (!args.complete_dst_filepath) {
@@ -229,7 +232,6 @@ int get_info_from_first_packet(const unsigned char *packet_buffer) {
     // copy the folder and then the filename
     strcpy(args.complete_dst_filepath, args.dst_filepath);
     strcpy((args.complete_dst_filepath + strlen(args.dst_filepath)), (char *)buffer);
-
     return EXIT_OK;
 }
 
@@ -240,6 +242,7 @@ int init_socket() {
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     receiver_addr.sin_port = htons(DNS_PORT);
+
     if (debug) {
         printf("opening UDP socket(...)\n");
     }
@@ -286,6 +289,8 @@ int main(int argc, char *argv[]) {
     unsigned char packet_buffer[DNS_SIZE];
     // buffer for incoming data after decoding from dns(dot) format
     unsigned char second_packet_buffer[DNS_SIZE];
+    // third buffer only for interface function
+    unsigned char third_packet_buffer[DNS_SIZE];
     // buffer for received data
     static unsigned char data_buffer[DNS_SIZE];
     // only DNS size because decoded data is smaller
@@ -332,6 +337,7 @@ int main(int argc, char *argv[]) {
             // reset buffers
             memset(packet_buffer, 0, DNS_SIZE);
             memset(second_packet_buffer, 0, DNS_SIZE);
+            memset(third_packet_buffer, 0, DNS_SIZE);
             memset(data_buffer, 0, DNS_SIZE);
             memset(decoded_data_buffer, 0, DNS_SIZE);
 
@@ -345,10 +351,8 @@ int main(int argc, char *argv[]) {
             if (check_base_host_suffix((char *)(second_packet_buffer + sizeof(struct DNSHeader)))) {
                 continue;
             }
-            if (interface) {
-                dns_receiver__on_query_parsed(args.complete_dst_filepath,
-                                              (char*)(second_packet_buffer + sizeof(struct DNSHeader) + 1));
-            }
+            // copy content to preserve it for interface function
+            copy_buffers(second_packet_buffer, third_packet_buffer, rec_len);
             // gets all data from packet
             get_data_from_packet(second_packet_buffer, data_buffer, rec_len, &data_buffer_position);
             // comparison to find if the received packet was the last one
@@ -357,6 +361,11 @@ int main(int argc, char *argv[]) {
                 // reset data buffer position for next file
                 data_buffer_position = 0;
                 break;
+            }
+            // not printing last info packet(last one contains only x.base_host)
+            if (interface) {
+                dns_receiver__on_query_parsed(args.complete_dst_filepath,
+                                              (char*)(third_packet_buffer + sizeof(struct DNSHeader) + 1));
             }
             // decode received base16 encoded data
             decode_buffer(data_buffer, decoded_data_buffer);
@@ -378,12 +387,8 @@ int main(int argc, char *argv[]) {
             // send ack to sender
             if (send_ack_response(packet_buffer, rec_len)) return E_INT;
         }
-        // free malloced memory for filepath
-        free(args.dst_filepath);
-        free(args.complete_dst_filepath);
         // close output file
         fclose(out_ptr);
-
         if (timeout) {
             if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
         }
@@ -391,5 +396,8 @@ int main(int argc, char *argv[]) {
             // calling an interface function
             dns_receiver__on_transfer_completed(args.complete_dst_filepath, content_length);
         }
+        // free malloced memory for filepath
+        free(args.dst_filepath);
+        free(args.complete_dst_filepath);
     }
 }

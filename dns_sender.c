@@ -10,6 +10,8 @@
 
 #include "dns_sender.h"
 
+#define RECEIVER_PORT DNS_PORT
+
 struct InputArgs {
     // base domain for all communication
     char *base_host;
@@ -97,7 +99,7 @@ int find_ip_version(const char *src) {
     } else if (inet_pton(AF_INET6, src, buf)) {
         return 6;
     }
-    return -1;
+    return handle_error(E_IP_VER);
 }
 
 int scan_resolv_conf() {
@@ -113,7 +115,7 @@ int scan_resolv_conf() {
                 number_of_ips += 1;
                 args.upstream_dns_ip = malloc(sizeof(char) * strlen(ip_buffer) + 1);
                 if (!args.upstream_dns_ip) {
-                    return E_INT;
+                    return handle_error(E_INT);
                 }
                 memset(args.upstream_dns_ip, 0, strlen(ip_buffer) + 1);
                 strcpy(args.upstream_dns_ip, ip_buffer);
@@ -128,7 +130,7 @@ int scan_resolv_conf() {
         }
     }
     if (!number_of_ips) {
-        return E_NM_SRV;
+        return handle_error(E_NM_SRV);
     }
     fclose(fd);
     return 0;
@@ -185,7 +187,7 @@ int parse_args(int argc, char *argv[]) {
     }
     // upstream DNS server was not given, try to find one in /etc/resolv.conf
     if (!u_flag) {
-        if (scan_resolv_conf()) return E_NM_SRV;
+        if (scan_resolv_conf()) return handle_error(E_NM_SRV);
     }
     return EXIT_OK;
 }
@@ -195,7 +197,7 @@ int read_char_from_src(int *c) {
         // if the fptr is not opened yet
         if (!fptr) {
             if (open_file(args.src_filepath, "rb", &fptr)) {
-                return E_OPEN_FILE;
+                return handle_error(E_OPEN_FILE);
             }
         }
         // read binary file
@@ -209,7 +211,7 @@ int read_char_from_src(int *c) {
     ssize_t res;
     if ((res = read(0, &c, 1)) < 0) {
         // error reading file
-        return E_RD_FILE;
+        return handle_error(E_RD_FILE);
     }
     // eof was read
     if (res == 0) {
@@ -260,11 +262,11 @@ int init_socket() {
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_addr.s_addr = inet_addr(args.upstream_dns_ip);
-    receiver_addr.sin_port = htons(DNS_PORT);
+    receiver_addr.sin_port = htons(RECEIVER_PORT);
 
     // create datagram socket
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-        return E_SOCK_CRT;
+        return handle_error(E_SOCK_CRT);
     }
 
     return EXIT_OK;
@@ -273,7 +275,7 @@ int init_socket() {
 int send_first_info_packet() {
     unsigned char buffer[DNS_SIZE] = {0};
     int id = 0, pos = 0;
-    construct_dns_header((buffer), id, 1);
+    construct_dns_header((buffer), id);
     pos += sizeof(struct DNSHeader);
 
     // for first length octet
@@ -298,7 +300,6 @@ int send_first_info_packet() {
 
     if ((res = send_and_wait(sock_fd, &receiver_addr, buffer, pos, &rec_len,
                   &addr_len, id)) != 0) {
-
         return res;
     }
     return EXIT_OK;
@@ -307,7 +308,7 @@ int send_first_info_packet() {
 int send_last_info_packet() {
     unsigned char buffer[DNS_SIZE] = {0};
     int id = 0, pos = 0;
-    construct_dns_header((buffer), id, 1);
+    construct_dns_header((buffer), id);
     pos += sizeof(struct DNSHeader);
 
     // for first length octet
@@ -321,9 +322,9 @@ int send_last_info_packet() {
     pos += (int)strlen(args.checked_base_host);
     // zero length octet
     pos += 1;
-
+    // convert from dot format to length octet format
     convert_dns_format(buffer, pos);
-
+    // add DNS question section(0 1 0 1)
     construct_dns_question(buffer + pos);
     pos += sizeof(struct Question);
 
@@ -349,8 +350,9 @@ int send_packets() {
     if (interface) {
         dns_sender__on_transfer_init((struct in_addr *) &receiver_addr.sin_addr);
     }
+    // send packet with destination file name
     send_first_info_packet();
-
+    // char currently inserted into buffer
     char c;
     // stops on break from inside
     int chunk_n = 1, chunk_id;
@@ -369,7 +371,7 @@ int send_packets() {
         // get new chunk id, take care of id overflow
         chunk_id = (int) (chunk_n) % (1 << 16);
         // create header and shift `pos`
-        construct_dns_header(packet_buffer, chunk_id, 1);
+        construct_dns_header(packet_buffer, chunk_id);
         packet_buffer_pos += sizeof(struct DNSHeader);
         // label capacity left in current label section
         int label_capacity = LABEL_SIZE;
