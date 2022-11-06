@@ -11,7 +11,7 @@
 #include "dns_sender.h"
 // CHANGE FOR TESTING TO TESTER_PORT
 // FOR NORMAL USAGE KEEP DNS_PORT
-#define RECEIVER_PORT TESTER_PORT
+#define RECEIVER_PORT DNS_PORT
 // timeout for sender
 #define SND_TO_S 4
 

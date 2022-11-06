@@ -32,3 +32,4 @@ pack: clean
 clean:
 	rm -f sender/*.o receiver/*.o common/*.o tester/*.o
 	rm -f dns_sender dns_receiver dns_tester
+	rm -f xkrato61.tar

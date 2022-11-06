@@ -361,7 +361,7 @@ int main(int argc, char *argv[]) {
 
             // receive new packet
             if ((receive_packet_fail = get_packet(sock_fd, &receiver_addr, packet_buffer, &rec_len, &addr_len))) break;
-            if (get_packet_id(packet_buffer) != (int)(chunk_id) % (1 << 16)) {
+            if (get_packet_id(packet_buffer) != (unsigned int)(chunk_id) % (1 << 16)) {
                 continue;
             }
             // copy to second buffer for processing, to preserve the original packet for ack to sender
