@@ -11,6 +11,7 @@
 #include "dns_sender.h"
 
 #define RECEIVER_PORT DNS_PORT
+#define SND_TO_S 3
 
 struct InputArgs {
     // base domain for all communication
@@ -305,9 +306,9 @@ int send_first_info_packet() {
     return EXIT_OK;
 }
 
-int send_last_info_packet() {
+int send_last_info_packet(int id) {
     unsigned char buffer[DNS_SIZE] = {0};
-    int id = 0, pos = 0;
+    int pos = 0;
     construct_dns_header((buffer), id);
     pos += sizeof(struct DNSHeader);
 
@@ -345,7 +346,7 @@ int send_packets() {
     if (init_socket()) return E_INIT_CONN;
 
     if (timeout) {
-        if (set_timeout(sock_fd)) return E_INT;
+        if (set_timeout(sock_fd, SND_TO_S)) return E_INT;
     }
     if (interface) {
         dns_sender__on_transfer_init((struct in_addr *) &receiver_addr.sin_addr);
@@ -369,7 +370,7 @@ int send_packets() {
         // empty the buffer
         memset(packet_buffer, 0, DNS_SIZE);
         // get new chunk id, take care of id overflow
-        chunk_id = (int) (chunk_n) % (1 << 16);
+        chunk_id = (int)(chunk_n) % (1 << 16);
         // create header and shift `pos`
         construct_dns_header(packet_buffer, chunk_id);
         packet_buffer_pos += sizeof(struct DNSHeader);
@@ -447,7 +448,7 @@ int send_packets() {
             break;
         }
     }
-    send_last_info_packet();
+    send_last_info_packet((int)(chunk_n) % (1 << 16));
     if (interface) {
         dns_sender__on_transfer_completed(args.dst_filepath, (int)total_len);
     }

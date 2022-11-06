@@ -152,8 +152,8 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
     return EXIT_OK;
 }
 
-int set_timeout(int sock_fd) {
-    struct timeval timeout = {TIMEOUT_S,0};
+int set_timeout(int sock_fd, int to_s) {
+    struct timeval timeout = {to_s,0};
     if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0 ||
         setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
         return E_SET_TIMEOUT;

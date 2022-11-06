@@ -15,14 +15,14 @@
 
 // default DNS port
 #define DNS_PORT 53
+// default DNS tester port
+#define TESTER_PORT 1645
 // max size of DNS packet sent over UDP
 #define DNS_SIZE 512
 // max size for a FQDN(stored in DNS packet as QNAME)
 #define QNAME_SIZE 255
 // two bits out of eight are reserved for reference distinction
 #define LABEL_SIZE 63
-// timeout time in seconds
-#define TIMEOUT_S 3
 // retry count for sending and receiving packets
 #define RETRY_N 3
 // DNS kind of query codes
@@ -160,7 +160,7 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
  *
  *   returns: EXIT_OK(0) on success, E_SET_TIMEOUT on error
  */
-int set_timeout(int sock_fd);
+int set_timeout(int sock_fd, int to_s);
 
 /*
  * Function: unset_timeout

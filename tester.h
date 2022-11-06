@@ -5,7 +5,9 @@
  *
  * @file dns_tester.h
  *
- * @brief
+ * @brief Header for testing of DNS tunneling application
  */
 
 #pragma once
+
+#include "common.h"

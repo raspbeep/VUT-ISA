@@ -9,6 +9,7 @@
  */
 
 #include "dns_receiver.h"
+#define REC_TO_S 10
 
 struct InputArgs {
     // base domain for all communications
@@ -29,7 +30,7 @@ int timeout = 1;
 // enable calling interface functions
 int interface = 1;
 // enable some debug messages
-int debug = 0;
+int debug = 1;
 
 
 void print_help() {
@@ -329,9 +330,9 @@ int main(int argc, char *argv[]) {
         if (open_file(args.complete_dst_filepath, "wb", &out_ptr)) return E_OPEN_FILE;
         // option to disable timeout(for debugging)
         if (timeout) {
-            if (set_timeout(sock_fd)) return E_SET_TIMEOUT;
+            if (set_timeout(sock_fd, REC_TO_S)) return E_SET_TIMEOUT;
         }
-
+        int receive_packet_fail = 0;
         int chunk_id = 1;
         while (1) {
             // reset buffers
@@ -342,7 +343,7 @@ int main(int argc, char *argv[]) {
             memset(decoded_data_buffer, 0, DNS_SIZE);
 
             // receive new packet
-            if (get_packet(sock_fd, &receiver_addr, packet_buffer, &rec_len, &addr_len)) return E_INT;
+            if ((receive_packet_fail = get_packet(sock_fd, &receiver_addr, packet_buffer, &rec_len, &addr_len))) break;
             // copy to second buffer for processing, to preserve the original packet for ack to sender
             copy_buffers(packet_buffer, second_packet_buffer, rec_len);
             // convert from dns(dot) format
@@ -386,6 +387,13 @@ int main(int argc, char *argv[]) {
             data_buffer_position = 0;
             // send ack to sender
             if (send_ack_response(packet_buffer, rec_len)) return E_INT;
+        }
+        if (receive_packet_fail) {
+            printf("Skipping file, timeout reached.\n");
+            free(args.dst_filepath);
+            free(args.complete_dst_filepath);
+            fclose(out_ptr);
+            continue;
         }
         // close output file
         fclose(out_ptr);

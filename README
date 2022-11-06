@@ -1,0 +1,19 @@
+DNS Tunneling Application
+author: Pavel Kratochvil
+brief: A dns tunneling application that sends data over in a series of DNS queries.
+
+dns_sender:
+
+
+
+
+dns_receiver:
+
+
+
+dns_tester:
+For testing client and server side of this dns tunneling application, the defined receiver
+port at the beginning the source code of dns_sender has to be changed to TESTER_PORT.
+Afterwards, the dns_receiver and dns_tester have to be launched first(in arbitrary order)
+and then dns_seder can be launched.
+

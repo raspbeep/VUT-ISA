@@ -129,9 +129,11 @@ int send_first_info_packet();
  * ----------------------------
  *   Sends last packet with content of 'x.base_host'.
  *
+ *   id: id of the last packet
+ *
  *   returns: EXIT_OK(0) on success, result of sending on error
  */
-int send_last_info_packet();
+int send_last_info_packet(int id);
 
 /*
  * Function: send_packets

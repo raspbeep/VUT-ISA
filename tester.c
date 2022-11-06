@@ -7,7 +7,7 @@
  *
  * @file dns_tester.c
  *
- * @brief Client side of DNS tunneling application
+ * @brief Testing of DNS tunneling application
  */
 
 #pragma once
@@ -26,9 +26,8 @@
 #include "tester.h"
 
 #define BUFFER 1024
-#define RECEIVER_IP "127.0.0.1"
+#define RECEIVER_IP "0.0.0.0"
 #define RECEIVER_PORT 53
-#define TESTER_PORT 1645
 #define BUFFER 1024
 
 // communication tester <-> receiver
@@ -87,7 +86,7 @@ int init_connection_to_sender() {
         return 0;
 }
 
-int drop_generator() {
+int drop_generator_bin() {
     static int streak = 0;
     if (streak == 1) {
         streak = 0;
@@ -98,6 +97,16 @@ int drop_generator() {
         return 1;
     }
     return 0;
+}
+
+int change_generator() {
+    return rand() % 2;
+}
+
+void change_packet_id() {
+    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
+    int orig_id = ntohs(dns_header->id);
+    dns_header->id = htons(orig_id - 1);
 }
 
 
@@ -120,7 +129,8 @@ int main(int argc, char *argv[]) {
     while ((received_len = recvfrom(sock_fd_to_sender, buffer, BUFFER, 0, (struct sockaddr *)&sender_addr, &addr_len)) >= 0) {
         printf("data received from %s, port %d\n", inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port));
 
-        if (!drop_generator()) {
+        // don't do anything with the packet
+        if (!drop_generator_bin()) {
             // send message to receiver
             sent_len = send(sock_fd_to_receiver, buffer, received_len, 0);
             if (sent_len == -1) {
@@ -143,8 +153,37 @@ int main(int argc, char *argv[]) {
             }
             printf("Successfully sent packet to receiver and confirmed to sender\n");
         } else {
-            printf("##### Dropped packet\n");
-        }
+            // change something or drop
 
+            int change = change_generator();
+            // drop it
+            if (change == 0) {
+                continue;
+            } else if (change == 1) {
+                printf("Changing packet id\n");
+                change_packet_id();
+            }
+
+            // send message to receiver
+            sent_len = send(sock_fd_to_receiver, buffer, received_len, 0);
+            if (sent_len == -1) {
+                err(1, "send() failed");
+            } else if (sent_len != received_len) {
+                err(1, "send(): buffer written partially");
+            }
+
+            // receive ACK message from receiver
+            if ((received_len = recvfrom(sock_fd_to_receiver, buffer, BUFFER, 0, (struct sockaddr *) &receiver_addr,
+                                         &addr_len)) >= 0) {
+                // send message to receiver
+                sent_len = sendto(sock_fd_to_sender, buffer, received_len, 0, (struct sockaddr *) &sender_addr,
+                                  addr_len);
+                if (sent_len == -1) {
+                    err(1, "send() failed");
+                } else if (sent_len != received_len) {
+                    err(1, "send(): buffer written partially");
+                }
+            }
+        }
     }
 }
