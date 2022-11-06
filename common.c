@@ -83,8 +83,19 @@ int get_packet(int sock, struct sockaddr_in *addr, unsigned char *buffer, ssize_
 
 unsigned int get_packet_id(unsigned char *buffer) {
     struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
-    if (dns_header->r_code != NXDOMAIN) return -1;
     return (unsigned)ntohs(dns_header->id);
+}
+
+unsigned char get_packet_rc(unsigned char *buffer) {
+    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
+    return dns_header->r_code;
+}
+
+unsigned char get_packet_a_count(unsigned char *buffer) {
+    struct DNSHeader *dns_header = (struct DNSHeader *)buffer;
+    return (unsigned)ntohs(dns_header->ans_count) +
+            (unsigned)ntohs(dns_header->ar_count) +
+            (unsigned)ntohs(dns_header->ns_count);
 }
 
 int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
@@ -93,6 +104,7 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
     int retries = RETRY_N;
     int receive_res;
     int send_res;
+    int inv_response;
     // retry for number of retries if sending or receiving failed
     while (retries) {
         send_res = send_packet(sock_fd, addr, buffer, pos);
@@ -107,9 +119,22 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
         }
         // check received packet id
         if (get_packet_id(buffer) != id) {
+            inv_response = 1;
             retries--;
             continue;
         }
+        if (get_packet_rc(buffer) != NXDOMAIN) {
+            inv_response = 1;
+            retries--;
+            continue;
+        }
+        // don't expect answer RRs of any kind
+        if (get_packet_a_count(buffer) != 0) {
+            inv_response = 1;
+            retries--;
+            continue;
+        }
+        inv_response = 0;
         break;
     }
     if (receive_res && send_res) {
@@ -120,6 +145,9 @@ int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
     }
     if (send_res) {
         return handle_error(E_PKT_SEND);
+    }
+    if (inv_response) {
+        return handle_error(E_PKT_REC);
     }
     return EXIT_OK;
 }
@@ -213,6 +241,6 @@ int handle_error(const int err_n) {
             fprintf(stderr, "Err: Invalid IP address.\n");
         default:
             fprintf(stderr, "Err: Unknown error occurred.\n");
-            return 69;
+            return 400;
     }
 }
