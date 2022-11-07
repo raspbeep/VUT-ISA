@@ -333,9 +333,9 @@ int main(int argc, char *argv[]) {
         // total length of the current packet
         ssize_t rec_len;
         if (get_packet(sock_fd, &sender_addr, packet_buffer, &rec_len, &addr_len)) return E_INT;
-
+        // send response changing RCODE in header to 4
         if (send_ack_response(packet_buffer, rec_len)) return E_INT;
-
+        // calling interface function
         if (interface) {
             dns_receiver__on_transfer_init((struct in_addr *)&receiver_addr.sin_addr);
         }
