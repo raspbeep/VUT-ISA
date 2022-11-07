@@ -159,3 +159,11 @@ void decode_buffer(unsigned char *src, unsigned char *dst);
  *   returns: string comparison result of args.checked_host and str
  */
 int check_base_host_suffix(char *str);
+
+/*
+ * Function: create_dst_path
+ * ----------------------------
+ *
+ *   returns: EXIT_OK(0) on success, E_INT on error
+ */
+int create_dst_path();

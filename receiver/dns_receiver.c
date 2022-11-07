@@ -38,7 +38,7 @@ void print_help() {
     printf( "DNS tunneling application server for receiving exfiltrated data.\n"
             "Usage: ./dns_receiver BASE_HOST DST_FILEPATH\n"
             "   BASE_HOST       -   Required root domain e.g. example.com(max 64 characters)\n"
-            "   DST_FILEPATH    -   Required destination of transferred data (e.g. ./received_data/),\n"
+            "   DST_DIRPATH    -    Required destination folder for transferred data (e.g. ./received_data/),\n"
             "                       resulting filename is determined by sender.\n\n"
     );
 }
@@ -299,6 +299,32 @@ int check_base_host_suffix(char *str) {
     return strcmp(str + strlen(str) - strlen(args.checked_base_host), args.checked_base_host);
 }
 
+int create_dst_path() {
+    // buffer for storing each part of path being currently processed
+    char buffer[1024] = {0};
+    for (int i = 0; i < (int)strlen(args.complete_dst_filepath); i++) {
+        if (args.complete_dst_filepath[i] == '/') {
+            struct stat stat_res;
+            if (access(buffer, W_OK)) {
+                if (stat(buffer, &stat_res) != 0) {
+                    mkdir(buffer, 0700);
+                    if (access(buffer, W_OK)) {
+                        return handle_error(E_DIR_CRT);
+                    }
+                }
+            }
+            if (stat(buffer, &stat_res)) {
+                return handle_error(E_DIR_CRT);
+            }
+            if (!S_ISDIR(stat_res.st_mode)) {
+                return handle_error(E_NOT_DIR);
+            }
+        }
+        buffer[i] = args.complete_dst_filepath[i];
+    }
+    return EXIT_OK;
+}
+
 int main(int argc, char *argv[]) {
     signal(SIGINT, sigint_handler);
     // buffer for incoming data
@@ -341,6 +367,7 @@ int main(int argc, char *argv[]) {
         if (get_info_from_first_packet(packet_buffer)) {
             return E_INT;
         }
+        create_dst_path();
         // open the output file in binary mode
         if (open_file(args.complete_dst_filepath, "wb", &out_ptr)) return E_OPEN_FILE;
         // option to disable timeout(for debugging)
@@ -411,18 +438,18 @@ int main(int argc, char *argv[]) {
         if (timeout) {
             if (unset_timeout(sock_fd)) return E_SET_TIMEOUT;
         }
+        if (interface) {
+            // calling an interface function
+            dns_receiver__on_transfer_completed(args.complete_dst_filepath, content_length);
+        }
         if (receive_packet_fail) {
             if (debug) {
-                fprintf(stdout, "Skipping file, timeout reached.\n");
+                fprintf(stderr, "[ERR] Skipping file, timeout reached.\n");
             }
             free(args.dst_filepath);
             free(args.complete_dst_filepath);
             fclose(out_ptr);
             continue;
-        }
-        if (interface) {
-            // calling an interface function
-            dns_receiver__on_transfer_completed(args.complete_dst_filepath, content_length);
         }
         // free malloced memory for filepath
         free(args.complete_dst_filepath);

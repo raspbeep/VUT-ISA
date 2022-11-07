@@ -5,7 +5,7 @@
  *
  * @file dns_sender.c
  *
- * @brief
+ * @brief Client side of DNS tunneling application
  */
 
 #include "dns_sender.h"
@@ -134,6 +134,7 @@ int scan_resolv_conf() {
 }
 
 int parse_args(int argc, char *argv[]) {
+    // 6 because -u [IP] is counted as 2 args
     if (argc < 2 || argc > 6) {
         handle_error(E_NUM_ARGS);
         print_help();
@@ -174,8 +175,8 @@ int parse_args(int argc, char *argv[]) {
     }
 
     // insufficient number of positional arguments were found
-    // at least too are required
-    if (positional_arg_counter <= 1) {
+    // at least two are required
+    if (positional_arg_counter < 2) {
         return handle_error(E_POS_ARG);
     }
     int res;
@@ -264,6 +265,67 @@ int init_socket() {
     return EXIT_OK;
 }
 
+int send_and_wait(int sock, struct sockaddr_in *addr, unsigned char *buffer,
+                  int pos, ssize_t *rec_len, socklen_t *address_len, int id, int chunk_n, int char_count) {
+
+    int retries = RETRY_N;
+    int receive_res;
+    int send_res;
+    int inv_response;
+    // retry for number of retries if sending or receiving failed
+    while (retries) {
+        send_res = send_packet(sock, addr, buffer, pos);
+        // calling interface function
+        if (interface && chunk_n != -1 && char_count != -1) {
+            // char count / 2 because the encoded length is twice the original
+            dns_sender__on_chunk_sent((struct in_addr *) &receiver_addr.sin_addr,
+                                      args.dst_filepath, chunk_n, char_count / 2);
+        }
+
+        if (send_res != EXIT_OK) {
+            retries--;
+            continue;
+        }
+        receive_res = get_packet(sock, addr, buffer, rec_len, address_len);
+        if (receive_res != EXIT_OK) {
+            retries--;
+            continue;
+        }
+        // check received packet id
+        if (get_packet_id(buffer) != (unsigned)id) {
+            inv_response = 1;
+            retries--;
+            continue;
+        }
+        if (get_packet_rc(buffer) != DNS_BAD_FORMAT_ACK) {
+            inv_response = 1;
+            retries--;
+            continue;
+        }
+        // don't expect answer RRs of any kind
+        if (get_packet_a_count(buffer) != 0) {
+            inv_response = 1;
+            retries--;
+            continue;
+        }
+        inv_response = 0;
+        break;
+    }
+    if (receive_res && send_res) {
+        return EXIT_OK;
+    }
+    if (receive_res) {
+        return handle_error(E_PKT_REC);
+    }
+    if (send_res) {
+        return handle_error(E_PKT_SEND);
+    }
+    if (inv_response) {
+        return handle_error(E_PKT_REC);
+    }
+    return EXIT_OK;
+}
+
 int send_first_info_packet() {
     unsigned char buffer[DNS_SIZE] = {0};
     int id = 0, pos = 0;
@@ -291,7 +353,7 @@ int send_first_info_packet() {
     int res;
 
     if ((res = send_and_wait(sock_fd, &receiver_addr, buffer, pos, &rec_len,
-                  &addr_len, id)) != 0) {
+                  &addr_len, id, -1, -1)) != 0) {
         return res;
     }
     return EXIT_OK;
@@ -323,7 +385,7 @@ int send_last_info_packet(int id) {
     ssize_t rec_len;
     int res;
     if ((res = send_and_wait(sock_fd, &receiver_addr, buffer, pos, &rec_len,
-                             &addr_len, id)) != 0) {
+                             &addr_len, id, -1, -1)) != 0) {
         return res;
     }
     return EXIT_OK;
@@ -339,13 +401,13 @@ int send_packets() {
     if (timeout) {
         if (set_timeout(sock_fd, SND_TO_S)) return E_INT;
     }
-    if (interface) {
-        dns_sender__on_transfer_init((struct in_addr *) &receiver_addr.sin_addr);
-    }
     // send packet with destination file name
     int res;
     if ((res = send_first_info_packet()) != 0) {
         return res;
+    }
+    if (interface) {
+        dns_sender__on_transfer_init((struct in_addr *) &receiver_addr.sin_addr);
     }
     // char currently inserted into buffer
     char c;
@@ -426,16 +488,10 @@ int send_packets() {
         // add question to the end of the buffer (0 1 0 1)
         construct_dns_question(packet_buffer + packet_buffer_pos);
         packet_buffer_pos += sizeof(struct Question);
-        // calling interface function
-        if (interface) {
-            // char count / 2 because the encoded length is twice the original
-            dns_sender__on_chunk_sent((struct in_addr *) &receiver_addr.sin_addr,
-                                      args.dst_filepath, chunk_n, char_count / 2);
-        }
 
         if ((res = send_and_wait(sock_fd, &receiver_addr, packet_buffer,
                                  packet_buffer_pos, &rec_len,
-                                 &addr_len, chunk_id))) {
+                                 &addr_len, chunk_id, chunk_n, char_count))) {
             return res;
         }
         chunk_n++;

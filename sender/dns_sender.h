@@ -104,6 +104,26 @@ void convert_dns_format(unsigned char *packet_buffer, int packet_buffer_pos);
 int init_socket();
 
 /*
+ * Function: send_and_wait
+ * ----------------------------
+ *   Send a packet to the server and wait for a response.
+ *
+ *   sock_fd: socket file descriptor
+ *   addr: address to send the packet to
+ *   buffer: data to send
+ *   pos: position(length of data to send) in buffer
+ *   rec_len: received length
+ *   addr_len: length of address
+ *   id: identification of packet
+ *   chunk_n: identification of chunk
+ *   char_count: number of raw data characters in current packet
+ *
+ *   returns: EXIT_OK(0) on success, E_PKT_REC or E_PKT_SEND on error
+ */
+int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
+                  int pos, ssize_t *rec_len, socklen_t *addr_len, int id, int chunk_n, int char_count);
+
+/*
  * Function: parse_args
  * ----------------------------
  *   Sends first packet with dst_filename.

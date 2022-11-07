@@ -35,7 +35,7 @@ the value of interface variable(for debug).
 RECEIVER dns_receiver
 Usage: ./dns_receiver BASE_HOST DST_FILEPATH
    BASE_HOST       -   Required queried host to concatenate with sent data(e.g. example.com)
-   DST_FILEPATH    -   Required destination of transferred data (e.g. ./received_data/),
+   DST_DIRPATH    -   Required destination of transferred data (e.g. ./received_data/),
                        resulting filename is determined by sender.
 
 BASE_HOST can begin with an optional dot(e.g. .example.com), has to be shorter than 64 characters.

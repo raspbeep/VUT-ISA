@@ -50,35 +50,37 @@
 #define E_RD_PERM 7
 // insufficient permission for reading input file
 #define E_NOT_DIR 8
+// error creating destination file path
+#define E_DIR_CRT 9
 // error occurred opening source or destination file
-#define E_OPEN_FILE 9
+#define E_OPEN_FILE 10
 // error occurred reading input file
-#define E_RD_FILE 10
+#define E_RD_FILE 11
 // base host does not meet length requirements(name is longer than 63 chars
 // or total length exceeds )
-#define E_HOST_LEN 11
+#define E_HOST_LEN 12
 // invalid char in base host, only alphanumeric are allowed
-#define E_HOST_INV_CHAR 12
+#define E_HOST_INV_CHAR 13
 // error during sending packet
-#define E_PKT_SEND 13
+#define E_PKT_SEND 14
 // error during receiving packet
-#define E_PKT_REC 14
+#define E_PKT_REC 15
 // error initializing connection
-#define E_INIT_CONN 15
+#define E_INIT_CONN 16
 // error creating a socket endpoint for communication
-#define E_SOCK_CRT 16
+#define E_SOCK_CRT 17
 // error binding to socket
-#define E_BIND 17
+#define E_BIND 18
 // error timeout reached
-#define E_TIMEOUT 18
+#define E_TIMEOUT 19
 // error setting timeout(setsockopt)
-#define E_SET_TIMEOUT 19
+#define E_SET_TIMEOUT 20
 // error scanning /etc/resolv.conf
-#define E_NM_SRV 20
+#define E_NM_SRV 21
 // error determining IP address
-#define E_IP_VER 21
+#define E_IP_VER 22
 // destination filepath parameter is too long
-#define E_DST_PATH_LEN 22
+#define E_DST_PATH_LEN 23
 
 // DNS header struct
 struct DNSHeader {
@@ -203,24 +205,6 @@ unsigned char get_packet_a_count(unsigned char *buffer);
  *   returns: id of packet
  */
 unsigned int get_packet_id(unsigned char *buffer);
-
-/*
- * Function: send_and_wait
- * ----------------------------
- *   Send a packet to the server and wait for a response.
- *
- *   sock_fd: socket file descriptor
- *   addr: address to send the packet to
- *   buffer: data to send
- *   pos: position(length of data to send) in buffer
- *   rec_len: received length
- *   addr_len: length of address
- *   id: identification of packet
- *
- *   returns: EXIT_OK(0) on success, E_PKT_REC or E_PKT_SEND on error
- */
-int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
-                  int pos, ssize_t *rec_len, socklen_t *addr_len, int id);
 
 /*
  * Function: set_timeout

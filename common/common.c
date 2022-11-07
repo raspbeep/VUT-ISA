@@ -97,60 +97,6 @@ unsigned int get_packet_id(unsigned char *buffer) {
     return (unsigned)ntohs(dns_header->id);
 }
 
-int send_and_wait(int sock_fd, struct sockaddr_in *addr, unsigned char *buffer,
-        int pos, ssize_t *rec_len, socklen_t *addr_len, int id) {
-
-    int retries = RETRY_N;
-    int receive_res;
-    int send_res;
-    int inv_response;
-    // retry for number of retries if sending or receiving failed
-    while (retries) {
-        send_res = send_packet(sock_fd, addr, buffer, pos);
-        if (send_res != EXIT_OK) {
-            retries--;
-            continue;
-        }
-        receive_res = get_packet(sock_fd, addr, buffer, rec_len, addr_len);
-        if (receive_res != EXIT_OK) {
-            retries--;
-            continue;
-        }
-        // check received packet id
-        if (get_packet_id(buffer) != (unsigned)id) {
-            inv_response = 1;
-            retries--;
-            continue;
-        }
-        if (get_packet_rc(buffer) != DNS_BAD_FORMAT_ACK) {
-            inv_response = 1;
-            retries--;
-            continue;
-        }
-        // don't expect answer RRs of any kind
-        if (get_packet_a_count(buffer) != 0) {
-            inv_response = 1;
-            retries--;
-            continue;
-        }
-        inv_response = 0;
-        break;
-    }
-    if (receive_res && send_res) {
-        return EXIT_OK;
-    }
-    if (receive_res) {
-        return handle_error(E_PKT_REC);
-    }
-    if (send_res) {
-        return handle_error(E_PKT_SEND);
-    }
-    if (inv_response) {
-        return handle_error(E_PKT_REC);
-    }
-    return EXIT_OK;
-}
-
 int set_timeout(int sock_fd, int to_s) {
     struct timeval timeout = {to_s,0};
     if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0 ||
@@ -212,6 +158,9 @@ int handle_error(const int err_n) {
         case E_NOT_DIR:
             fprintf(stderr, "Err: DST_FILEPATH is not a directory.\n");
             return E_NOT_DIR;
+        case E_DIR_CRT:
+            fprintf(stderr, "Err: Unable to create destination directory path.\n");
+            return E_DIR_CRT;
         case E_OPEN_FILE:
             fprintf(stderr, "Err: Unable to open file.\n");
             return E_OPEN_FILE;
