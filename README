@@ -2,16 +2,16 @@ DNS Tunneling Application
 author: Pavel Kratochvil
 brief: A dns tunneling application that sends data over in a series of DNS queries.
 
-Since application supports only IPv4, not providing UPSTREAM_DNS IP(`-u`) will result in
+Since application supports only IPv4, not providing UPSTREAM_DNS_IP(`-u`) will result in
 an attempt to find an IPv4 address in /etc/resolv.conf. Program will use the first valid
 IPv4 address found. If no valid IPv4 address is found, program will exit with an error.
 
 Source code consists of several smaller parts. dns_sender.c(and its header file)
 and dns_receiver(and its header file) code and a common.c(and its header file)
-function library containing the code used in both parts.
+function library containing the code used in both previous parts.
 To compile both both parts use `make all`.
 
-Then there is a third source file dns_tester.c(and its header file), which is used for
+Then there is a fourth source file dns_tester.c(and its header file), which is used for
 testing the application. It is not necessary for the sender and receiver part to work
 and its compilation is not part of `make all` task.To compile the tester, separate
 `make tester` task is provided.

@@ -44,8 +44,8 @@ unsigned long total_len = 0;
 void print_help() {
     printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
             "   UPSTREAM_DNS_IP -   Optional IP to DNS server, which requests are sent to(e.g. 127.0.0.1)\n"
-            "   BASE_HOST       -   Required queried host to concatenate with sent data(e.g. example.com)\n"
-            "   DST_FILEPATH    -   Required destination file name of transferred data(file.txt)\n"
+            "   BASE_HOST       -   Required root domain e.g. example.com(max 64 characters)\n"
+            "   DST_FILEPATH    -   Required destination file name of transferred data(file.txt)(max 64 characters)\n"
             "   SRC_FILEPATH    -   Optional path to source file read in binary mode\n\n"
     );
 }
@@ -74,11 +74,8 @@ int check_base_host() {
     }
     *(args.checked_base_host) = '.';
     strcpy(args.checked_base_host + dot, args.base_host);
-
-    // +1 for zero length octet at the end
-    // +2 for at least on data byte(label length + one byte of data)
-    // >=255 to leave at least one char for the actual data
-    if (strlen(args.checked_base_host) + 1 + 2 >= 255) {
+    // check max allowed length
+    if (strlen(args.checked_base_host) >= 64) {
         return E_HOST_LEN;
     }
     // check lengths, max label size is 63
@@ -419,6 +416,10 @@ int send_packets() {
                 current_packet_data_capacity--;
                 label_capacity = LABEL_SIZE;
             }
+        }
+        // if sending zero byte file break and send last packet
+        if (last_char && !char_count) {
+            break;
         }
         // copy base host into buffer
         strcpy((char *)(packet_buffer + packet_buffer_pos), args.checked_base_host);

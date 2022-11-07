@@ -77,6 +77,8 @@
 #define E_NM_SRV 20
 // error determining IP address
 #define E_IP_VER 21
+// destination filepath parameter is too long
+#define E_DST_PATH_LEN 22
 
 // DNS header struct
 struct DNSHeader {

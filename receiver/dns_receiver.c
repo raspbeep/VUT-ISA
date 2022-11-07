@@ -36,7 +36,7 @@ FILE *out_ptr;
 
 void print_help() {
     printf( "Usage: ./dns_receiver BASE_HOST DST_FILEPATH\n"
-            "   BASE_HOST       -   Required queried host to concatenate with sent data(e.g. example.com)\n"
+            "   BASE_HOST       -   Required root domain e.g. example.com(max 64 characters)\n"
             "   DST_FILEPATH    -   Required destination of transferred data (e.g. ./received_data/),\n"
             "                       resulting filename is determined by sender.\n\n"
     );
@@ -65,10 +65,7 @@ int check_base_host() {
     *(args.checked_base_host) = '.';
     strcpy(args.checked_base_host + dot, args.base_host);
 
-    // +1 for zero length octet at the end
-    // +2 for at least on data byte(label length + one byte of data)
-    // >=255 to leave at least one char for the actual data
-    if (strlen(args.checked_base_host) + 1 + 2 >= 255) {
+    if (strlen(args.checked_base_host) >= 64) {
         return E_HOST_LEN;
     }
     // check lengths, max label size is 63
@@ -96,6 +93,9 @@ int check_base_host() {
 }
 
 int check_dst_filepath() {
+    if (strlen(args.dst_filepath) > 64) {
+        return handle_error(E_DST_PATH_LEN);
+    }
     int dot = 0;
     if (args.dst_filepath[strlen(args.dst_filepath) - 1] != '/') {
         dot = 1;
@@ -427,7 +427,6 @@ int main(int argc, char *argv[]) {
             dns_receiver__on_transfer_completed(args.complete_dst_filepath, content_length);
         }
         // free malloced memory for filepath
-        free(args.dst_filepath);
         free(args.complete_dst_filepath);
     }
 }

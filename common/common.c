@@ -241,6 +241,9 @@ int handle_error(const int err_n) {
         case E_IP_VER:
             fprintf(stderr, "Err: Invalid IP address.\n");
             return E_IP_VER;
+        case E_DST_PATH_LEN:
+            fprintf(stderr, "Err: DST_FILEPATH parameter too long.\n");
+            return E_DST_PATH_LEN;
         default:
             fprintf(stderr, "Err: Unknown error occurred.\n");
             return 400;
