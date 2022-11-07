@@ -13,8 +13,6 @@
 #include "dns_tester.h"
 
 #define BUFFER 1024
-#define RECEIVER_IP "0.0.0.0"
-#define BUFFER 1024
 
 // communication tester <-> receiver
 struct sockaddr_in receiver_addr;
@@ -25,51 +23,51 @@ ssize_t sent_len = 0;
 // communication sender <-> tester
 int sock_fd_to_sender;
 struct sockaddr_in tester_addr, sender_addr;
-int r;
 ssize_t received_len = 0;
 char buffer[BUFFER];
+char *receiver_ip = NULL;
+int receiver_port = DNS_PORT;
 
-// common
+// common for all connections(using only IPv4)
 socklen_t addr_len = sizeof(struct sockaddr_in);
-
 
 // UDP server for sending messages from sender to receiver
 int init_connection_to_receiver() {
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
-    receiver_addr.sin_addr.s_addr = inet_addr(RECEIVER_IP);
-    receiver_addr.sin_port = htons(DNS_PORT);
+    receiver_addr.sin_addr.s_addr = inet_addr(receiver_ip);
+    receiver_addr.sin_port = htons(receiver_port);
 
     // create datagram socket
     if ((sock_fd_to_receiver = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         return -1;
     }
-    fprintf(stdout, "[LOG] Socket for communication with receiver created\n");
+    fprintf(stdout, "[LOG]      Socket for communication with receiver created\n");
 
     if (connect(sock_fd_to_receiver, (struct sockaddr *)&receiver_addr, addr_len)  == -1) {
-        fprintf(stdout, "[ERR] connect() failed");
+        fprintf(stdout, "[ERR]      connect() failed");
     }
     return 0;
 }
 
 // UDP server for listening for messages from sender
 int init_connection_to_sender() {
-        memset(&receiver_addr, 0, sizeof(tester_addr));
-        memset(&sender_addr, 0, sizeof(sender_addr));
+    memset(&receiver_addr, 0, sizeof(tester_addr));
+    memset(&sender_addr, 0, sizeof(sender_addr));
 
-        tester_addr.sin_family = AF_INET;
-        tester_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        tester_addr.sin_port = htons(TESTER_PORT);
+    tester_addr.sin_family = AF_INET;
+    tester_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    tester_addr.sin_port = htons(TESTER_PORT);
 
-        fprintf(stdout, "[LOG] Opening UDP socket for communication sender <-> tester\n");
-        if ((sock_fd_to_sender = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-            return -1;
-        }
-        printf("[LOG] Binding with the port %d (%d)\n", ntohs(tester_addr.sin_port), tester_addr.sin_port);
-        if (bind(sock_fd_to_sender, (struct sockaddr *)&tester_addr, sizeof(tester_addr)) == -1) {
-            return -1;
-        }
-        return 0;
+    if ((sock_fd_to_sender = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        return -1;
+    }
+
+    if (bind(sock_fd_to_sender, (struct sockaddr *)&tester_addr, sizeof(tester_addr)) == -1) {
+        return -1;
+    }
+    fprintf(stdout, "[LOG]      Listening to sender on %s:%d\n", receiver_ip, ntohs(tester_addr.sin_port));
+    return 0;
 }
 
 int drop_generator_bin() {
@@ -95,8 +93,29 @@ void change_packet_id() {
     dns_header->id = htons(orig_id - 1);
 }
 
+void print_help() {
+    printf("Usage: ./dns_tester [UPSTREAM_DNS_IP]\n"
+           "   UPSTREAM_DNS_IP - Option IP of dns_receiver(defaults to 127.0.0.1)\n");
+}
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc > 2) {
+        print_help();
+        return 1;
+    }
+    if (argc == 1) {
+        receiver_ip = "127.0.0.1";
+    } else {
+        if (!strcmp(argv[1], "--help")) {
+            print_help();
+            return 0;
+        }
+        receiver_ip = argv[1];
+    }
+    if (find_ip_version(receiver_ip) != 4) {
+        fprintf(stderr, "[ERR] Invalid IP address\n");
+        return 1;
+    }
     // create seed for random packet drop generator
     srand(time(NULL));
 
@@ -107,13 +126,13 @@ int main() {
         return -1;
     }
     if (init_connection_to_sender() == -1) {
-        fprintf(stdout, "[ERR] Error while creating socket for communication sender <-> tester\n");
+        fprintf(stdout, "[ERR] Error while creating socket for communication sender <-> tester(%s)\n", receiver_ip);
         return -1;
     }
 
     // receive message from sender
     while ((received_len = recvfrom(sock_fd_to_sender, buffer, BUFFER, 0, (struct sockaddr *)&sender_addr, &addr_len)) >= 0) {
-        fprintf(stdout, "[LOG] Data received from %s, port %d\n", inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port));
+        fprintf(stdout, "[RECEIVE]  Data received from %s, port %d\n", inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port));
 
         // don't do anything with the packet
         if (!drop_generator_bin()) {
@@ -137,16 +156,17 @@ int main() {
                     fprintf(stderr, "[ERR] send(): buffer written partially");
                 }
             }
-            fprintf(stdout, "[LOG] Successfully sent packet to receiver and confirmed to sender\n");
+            fprintf(stdout, "[SENT]     Sent receiver and confirmed back to sender\n");
         } else {
             // change something or drop
 
             int change = change_generator();
             // drop it
             if (change == 0) {
+                fprintf(stdout, "[DROP]     Dropping packet\n");
                 continue;
             } else if (change == 1) {
-                fprintf(stdout, "[CHANGE] Changing packet id\n");
+                fprintf(stdout, "[CHANGE]   Changing packet id\n");
                 change_packet_id();
             }
 

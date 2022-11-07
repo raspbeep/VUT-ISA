@@ -42,7 +42,8 @@ int sock_fd;
 unsigned long total_len = 0;
 
 void print_help() {
-    printf( "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
+    printf( "DNS tunneling application client for exfiltrating data to a remote DNS server.\n"
+            "Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]\n"
             "   UPSTREAM_DNS_IP -   Optional IP to DNS server, which requests are sent to(e.g. 127.0.0.1)\n"
             "   BASE_HOST       -   Required root domain e.g. example.com(max 64 characters)\n"
             "   DST_FILEPATH    -   Required destination file name of transferred data(file.txt)(max 64 characters)\n"
@@ -54,16 +55,12 @@ int check_base_host() {
     int size = (int)strlen(args.base_host), dot = 0;
     // one more byte for the dot
     if (*(args.base_host) != '.') {
-        // does not begin with letter(FQDN)
-        if (!(*(args.base_host) >= 97 && *(args.base_host) <= 122)) {
-            return handle_error(E_HOST_INV_CHAR);
-        }
         size += 1;
         dot = 1;
-    } else {
-        if (!(*(args.base_host + 1) >= 97 && *(args.base_host + 1) <= 122)) {
-            return handle_error(E_HOST_INV_CHAR);
-        }
+    }
+    // return if it does not begin with letter(FQDN)
+    if (!(*(args.base_host + dot) >= 97 && *(args.base_host + dot) <= 122)) {
+        return handle_error(E_HOST_INV_CHAR);
     }
 
     // +1 for null byte at the end
@@ -100,16 +97,6 @@ int check_base_host() {
         }
     }
     return EXIT_OK;
-}
-
-int find_ip_version(const char *src) {
-    char buf[64];
-    if (inet_pton(AF_INET, src, buf)) {
-        return 4;
-    } else if (inet_pton(AF_INET6, src, buf)) {
-        return 6;
-    }
-    return handle_error(E_IP_VER);
 }
 
 int scan_resolv_conf() {

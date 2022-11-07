@@ -23,6 +23,13 @@
 #include "../common/common.h"
 
 /*
+ * Function: print_help.
+ * --------------------
+ *   Prints help message
+ */
+void print_help();
+
+/*
  * Function: check_base_host
  * ----------------------------
  *   Checks whether the base host is a valid FQDN(and < 252 chars, no spaces, no special chars).

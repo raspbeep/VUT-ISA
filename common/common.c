@@ -180,6 +180,16 @@ void char_base16_encode(char c, char *a, char *b) {
     *b = (char)((unsigned char)(c & 0x0f) + 'a');
 }
 
+int find_ip_version(const char *src) {
+    char buf[64];
+    if (inet_pton(AF_INET, src, buf)) {
+        return 4;
+    } else if (inet_pton(AF_INET6, src, buf)) {
+        return 6;
+    }
+    return handle_error(E_IP_VER);
+}
+
 int handle_error(const int err_n) {
     switch (err_n) {
         case E_INT:

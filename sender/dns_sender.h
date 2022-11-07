@@ -41,17 +41,6 @@ void print_help();
 int check_base_host();
 
 /*
- * Function: find_ip_version
- * ----------------------------
- *   Finds IP version of the given IP address.
- *
- *   src: pointer to IP char array
- *
- *   returns: EXIT_OK(0) on success, E_POS_ARG on error
- */
-int find_ip_version(const char *src);
-
-/*
  * Function: scan_resolv_conf
  * ----------------------------
  *   Attempts to get the first nameserver from /etc/resolv.conf.

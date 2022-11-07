@@ -267,6 +267,17 @@ void char_base16_decode(unsigned char a, unsigned char b, unsigned char *c);
 void char_base16_encode(char c, char *a, char *b);
 
 /*
+ * Function: find_ip_version
+ * ----------------------------
+ *   Finds IP version of the given IP address.
+ *
+ *   src: pointer to IP char array
+ *
+ *   returns: EXIT_OK(0) on success, E_POS_ARG on error
+ */
+int find_ip_version(const char *src);
+
+/*
  * Function: handle_error
  * ----------------------------
  *   Prints error message and returns argument err_n.

@@ -16,6 +16,9 @@ testing the application. It is not necessary for the sender and receiver part to
 and its compilation is not part of `make all` task.To compile the tester, separate
 `make tester` task is provided.
 
+Each program has implemented `--help` flag, which prints a short description of the
+program and its usage.
+
 SENDER dns_sender
 Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]
    UPSTREAM_DNS_IP -   Optional IP to DNS server, which requests are sent to(e.g. 127.0.0.1)
@@ -23,10 +26,10 @@ Usage: ./dns_sender [-u UPSTREAM_DNS_IP] BASE_HOST DST_FILEPATH [SRC_FILEPATH]
    DST_FILEPATH    -   Required destination file name of transferred data(file.txt)
    SRC_FILEPATH    -   Optional path to source file read in binary mode
 
-BASE_HOST can begin with an optional dot(e.g. .example.com), has to be shorter than 252 characters
-(255 for FQDN and 3 bytes for null byte, one length octet and at least one data byte).
-Timeouts can be turned of switching the timeout value to 0 at the beginning of the file.
-Calling interface functions can be turned off by setting the value of interface variable(for debug).
+BASE_HOST can begin with an optional dot(e.g. .example.com), has to be shorter than 64 characters.
+DST_FILEPATH has to be shorter than 64 characters. Timeouts can be turned of switching the timeout
+value to 0 at the beginning of the file. Calling interface functions can be turned off by setting
+the value of interface variable(for debug).
 
 
 RECEIVER dns_receiver
@@ -35,14 +38,17 @@ Usage: ./dns_receiver BASE_HOST DST_FILEPATH
    DST_FILEPATH    -   Required destination of transferred data (e.g. ./received_data/),
                        resulting filename is determined by sender.
 
-BASE_HOST can begin with an optional dot(e.g. .example.com), has to be shorter than 252 characters
-(255 for FQDN and 3 bytes for null byte, one length octet and at least one data byte).
-Timeouts can be turned of switching the timeout value to 0 at the beginning of the file.
-Calling interface functions can be turned off by setting the value of interface variable(for debug).
+BASE_HOST can begin with an optional dot(e.g. .example.com), has to be shorter than 64 characters.
+Timeouts can be turned of switching the timeout value to 0 at the beginning of the file.Calling
+interface functions can be turned off by setting the value of interface variable(for debug).
 
 
 TESTER dns_tester
+Usage: ./dns_tester [UPSTREAM_DNS_IP]
+   UPSTREAM_DNS_IP - Option IP of dns_receiver(defaults to 0.0.0.0)
 For testing client and server side of this dns tunneling application, the defined receiver
 port at the beginning the source code of dns_sender has to be changed to TESTER_PORT.
 Afterwards, the dns_receiver and dns_tester have to be launched first(in arbitrary order)
 and then dns_seder can be launched.
+
+More information about the implementation can be found in `manual.pdf`.
