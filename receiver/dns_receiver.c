@@ -117,7 +117,7 @@ int check_dst_filepath() {
     // need this check for stat
     if (access(args.dst_filepath, W_OK)) {
         if (stat(args.dst_filepath, &stat_res) != 0) {
-            mkdir(args.dst_filepath, 0700);
+            mkdir(args.dst_filepath, 0777);
             if (access(args.dst_filepath, W_OK)) {
                 return handle_error(E_NOT_DIR);
             } else {
@@ -310,7 +310,7 @@ int create_dst_path() {
             struct stat stat_res;
             if (access(buffer, W_OK)) {
                 if (stat(buffer, &stat_res) != 0) {
-                    mkdir(buffer, 0700);
+                    mkdir(buffer, 0777);
                     if (access(buffer, W_OK)) {
                         return handle_error(E_DIR_CRT);
                     }
