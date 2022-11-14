@@ -44,14 +44,17 @@ void print_help() {
 }
 
 int check_base_host() {
-    int size = (int)strlen(args.base_host), dot = 0;
+    int size = (int)strlen(args.base_host), dot = 0, skip = 0;
     // one more byte for the dot
     if (*(args.base_host) != '.') {
         size += 1;
         dot = 1;
+    } else {
+        // skip the dot
+        skip = 1;
     }
     // return if it does not begin with letter(FQDN)
-    if (!(*(args.base_host + dot) >= 97 && *(args.base_host + dot) <= 122)) {
+    if (!(*(args.base_host + skip) >= 97 && *(args.base_host + skip) <= 122)) {
         return handle_error(E_HOST_INV_CHAR);
     }
     // +1 for null byte at the end

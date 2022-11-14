@@ -16,7 +16,7 @@
 
 // default DNS port
 #define DNS_PORT 53
-// default DNS tester port
+// arbitrary default DNS tester port
 #define TESTER_PORT 1645
 // max size of DNS packet sent over UDP
 #define DNS_SIZE 512
